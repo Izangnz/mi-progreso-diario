@@ -136,6 +136,29 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
 .nav-icon { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .coming-soon { text-align: center; padding: 36px 22px; }
 .coming-soon p { line-height: 1.6; }
+.week-controls { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.week-controls button { min-height:44px; background:#303136; color:#E7DFD0; }
+.week-controls button:disabled { opacity:.4; cursor:default; }
+.week-controls #currentWeek { border:1px solid #AA854E; color:#E9D19A; }
+.week-range { margin:0; color:#ACA69D; font-size:14px; }
+.week-chart { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+.week-day { min-width:0; padding:8px 2px; background:transparent; color:#ACA69D; font:inherit; font-size:12px; border:1px solid transparent; }
+.week-day[aria-pressed="true"] { background:#29251D; border-color:#AA854E; }
+.week-day.is-today .day-name { color:#E9D19A; text-decoration:underline; text-underline-offset:4px; }
+.day-value,.day-name,.day-number { display:block; }
+.day-value { color:#E9D19A; font-weight:700; margin-bottom:8px; font-size:11px; }
+.day-number { margin-top:5px; font-size:11px; }
+.week-column { display:flex; align-items:flex-end; height:120px; max-width:30px; margin:0 auto 10px; background:#121418; border-bottom:1px solid #514A3D; border-radius:6px 6px 0 0; overflow:hidden; }
+.week-bar { display:block; width:100%; background:linear-gradient(0deg,#AA854E,#E9D19A); border-radius:5px 5px 0 0; }
+.week-day.is-zero .week-column { border-bottom:3px solid #DCC08B; }
+.week-day.is-missing .week-column { border:1px dashed #69645C; }
+.week-day.is-empty .week-column { background:repeating-linear-gradient(135deg,#121418 0 5px,#34332F 5px 7px); }
+.week-day.is-future .week-column { background:transparent; border-bottom-style:dotted; }
+.week-day.is-future .day-value { color:#ACA69D; }
+.week-legend { font-size:12px; color:#ACA69D; line-height:1.7; margin:16px 0; }
+.week-detail { background:#121418; border:1px solid #36332C; border-radius:14px; padding:16px; line-height:1.6; }
+.week-detail p { margin:4px 0; }
+.week-detail .detail-date { color:#E9D19A; font-weight:700; }
 @media(max-width:420px) {
   body { padding-top: 24px; }
   .card { padding: 18px; }
@@ -178,6 +201,18 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
       <input id="newHabit" type="text" maxlength="65" placeholder="Ej.: Aprender programación 20 min" aria-label="Nuevo hábito" required>
       <button type="submit">+ Añadir</button>
     </form>
+  </section>
+  <section class="card" aria-labelledby="weekTitle">
+    <h2 id="weekTitle">Tu semana</h2>
+    <p class="week-range" id="weekRange"></p>
+    <div class="week-controls" role="group" aria-label="Elegir semana">
+      <button type="button" id="previousWeek" aria-label="Ver semana anterior">← Anterior</button>
+      <button type="button" id="nextWeek" aria-label="Ver semana siguiente">Siguiente →</button>
+      <button type="button" id="currentWeek">Semana actual</button>
+    </div>
+    <div id="weekChart" class="week-chart" role="group" aria-label="Cumplimiento diario de lunes a domingo"></div>
+    <p class="week-legend">0 %: ningún hábito completado · —: sin registro · S/H: sin hábitos · ···: día futuro. Hoy aparece subrayado y está en curso.</p>
+    <div id="weekDetail" class="week-detail" aria-live="polite" aria-atomic="true"></div>
   </section>
   </section>
   <section id="podcasts" class="app-view" aria-labelledby="podcastsTitle" hidden>
@@ -313,6 +348,74 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
     }
   }
   function refresh() { return updateState(); }
+  // Estadísticas de solo lectura: navegar no escribe en localStorage.
+  let weekOffset = 0;
+  let selectedDay = localDate();
+  const dateKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  function weekDates() {
+    // Mediodía local y días de calendario evitan desplazamientos por horario de verano.
+    const monday = new Date(localDate() + "T12:00:00");
+    monday.setDate(monday.getDate() - (monday.getDay()+6)%7 + weekOffset*7);
+    return Array.from({length:7}, (_,i) => {
+      const date = new Date(monday);
+      date.setDate(date.getDate()+i);
+      return date;
+    });
+  }
+  function dayStats(key) {
+    if (key > localDate()) return {kind:"future",label:"Día futuro",value:"···"};
+    const record = state.history[key];
+    if (!record) return {kind:"missing",label:"Sin registro",value:"—"};
+    // Se calcula desde la copia de hábitos sin modificar el registro original.
+    if (!Array.isArray(record.habits)) return {kind:"missing",label:"Registro no disponible",value:"—"};
+    const total = record.habits.length;
+    const completed = record.habits.filter(h=>h.done).length;
+    if (!total) return {kind:"empty",label:"Sin hábitos",value:"S/H",total,completed};
+    const percentage = Math.round(completed/total*100);
+    return {kind:percentage===0 ? "zero" : "recorded",label:`${percentage} %`,value:`${percentage}%`,total,completed,percentage};
+  }
+  function renderWeek() {
+    const dates = weekDates();
+    const keys = dates.map(dateKey);
+    if (!keys.includes(selectedDay)) selectedDay = weekOffset===0 ? localDate() : keys[0];
+    const shortDate = new Intl.DateTimeFormat("es-ES",{day:"numeric",month:"short",year:"numeric"});
+    document.getElementById("weekRange").textContent = `${shortDate.format(dates[0])} — ${shortDate.format(dates[6])}`;
+    document.getElementById("nextWeek").disabled = weekOffset===0;
+    const chart = document.getElementById("weekChart");
+    const focusedDay = document.activeElement?.dataset?.weekDay;
+    chart.replaceChildren();
+    dates.forEach((date,i)=>{
+      const key = keys[i], stats = dayStats(key), today = key===localDate();
+      const button = document.createElement("button");
+      button.type="button";
+      button.dataset.weekDay=key;
+      button.className=`week-day is-${stats.kind}${today ? " is-today" : ""}`;
+      button.setAttribute("aria-pressed",String(key===selectedDay));
+      button.setAttribute("aria-label",`${shortDate.format(date)}: ${stats.label}${today ? ", hoy, en curso" : ""}`);
+      const value=document.createElement("span");value.className="day-value";value.textContent=stats.value;
+      const column=document.createElement("span");column.className="week-column";column.setAttribute("aria-hidden","true");
+      const bar=document.createElement("span");bar.className="week-bar";bar.style.height=`${stats.percentage ?? 0}%`;column.append(bar);
+      const name=document.createElement("span");name.className="day-name";name.textContent=["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][i];
+      const number=document.createElement("span");number.className="day-number";number.textContent=date.getDate();
+      button.append(value,column,name,number);
+      button.addEventListener("click",()=>{selectedDay=key;renderWeek();});
+      chart.append(button);
+      if (focusedDay===key) button.focus({preventScroll:true});
+    });
+    const detail=document.getElementById("weekDetail"), stats=dayStats(selectedDay);
+    detail.replaceChildren();
+    const title=document.createElement("p");title.className="detail-date";
+    title.textContent=new Intl.DateTimeFormat("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date(selectedDay+"T12:00:00"));
+    const result=document.createElement("p");
+    result.textContent=stats.total===undefined ? stats.label : stats.total===0 ? "Sin hábitos · 0 completados · 0 en total · Porcentaje: no corresponde" : `${stats.completed} de ${stats.total} hábitos completados · ${stats.percentage} % de cumplimiento`;
+    detail.append(title,result);
+    if(selectedDay===localDate()){
+      const ongoing=document.createElement("p");ongoing.className="muted";ongoing.textContent="Hoy · En curso. El resultado se actualiza con tus hábitos.";detail.append(ongoing);
+    }
+  }
+  document.getElementById("previousWeek").addEventListener("click",()=>{weekOffset--;renderWeek();});
+  document.getElementById("nextWeek").addEventListener("click",()=>{if(weekOffset<0)weekOffset++;renderWeek();});
+  document.getElementById("currentWeek").addEventListener("click",()=>{weekOffset=0;selectedDay=localDate();renderWeek();});
   function render(){
     const goalField = document.getElementById("weeklyGoal");
     if (document.activeElement !== goalField) goalField.value = state.weeklyGoal || "";
@@ -352,6 +455,7 @@ felicitacion.hidden = !(
     document.getElementById("percentage").textContent=`${percentage} %`;
     document.getElementById("progressBar").style.width=`${percentage}%`;
     document.getElementById("progress").setAttribute("aria-valuenow",percentage);
+    renderWeek();
   }
   document.getElementById("habitForm").addEventListener("submit",async event=>{
     event.preventDefault();const input=document.getElementById("newHabit");const name=input.value.trim();if(!name)return;
