@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mi progreso diario 🚀 — Hábitos y objetivos</title>
+  <meta name="theme-color" content="#101114">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Mi Progreso Diario">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <script src="./pwa.js" defer></script>
   <style>
     :root {font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark; background:#0b1220;color:#edf2ff}
     * {box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#1c3155 0%,#0b1220 55%);padding:36px 16px} main{max-width:700px;margin:auto}
@@ -159,6 +166,8 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
 .week-detail { background:#121418; border:1px solid #36332C; border-radius:14px; padding:16px; line-height:1.6; }
 .week-detail p { margin:4px 0; }
 .week-detail .detail-date { color:#E9D19A; font-weight:700; }
+.pwa-update { background:#242119; border:1px solid #AA854E; border-radius:14px; padding:16px; margin-bottom:20px; }
+.pwa-update p { margin:0 0 12px; line-height:1.5; }
 @media(max-width:420px) {
   body { padding-top: 24px; }
   .card { padding: 18px; }
@@ -168,6 +177,10 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
 </head>
 <body>
 <main>
+  <aside id="pwaUpdate" class="pwa-update" aria-label="Actualización de la aplicación" hidden>
+    <p id="pwaUpdateMessage" role="status">Nueva versión disponible. Puedes actualizar cuando termines.</p>
+    <button type="button" id="pwaUpdateButton">Actualizar</button>
+  </aside>
   <div class="eyebrow">Mi laboratorio SaaS 🚀</div>
   <!-- PARA PRACTICAR: cambia solo el texto que aparece entre <h1> y </h1>. -->
   <h1>Mi progreso diario 🚀</h1>
