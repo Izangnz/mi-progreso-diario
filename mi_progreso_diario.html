@@ -11,6 +11,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <script src="./pwa.js" defer></script>
+  <link rel="stylesheet" href="./aprendizaje.css">
+  <script src="./aprendizaje.js" defer></script>
   <style>
     :root {font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark; background:#0b1220;color:#edf2ff}
     * {box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#1c3155 0%,#0b1220 55%);padding:36px 16px} main{max-width:700px;margin:auto}
@@ -187,7 +189,7 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   <h1>Mi progreso diario 🚀</h1>
   <p class="sub" id="dateLabel"></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <p class="version-label">Mi Progreso Diario · v0.6</p>
+    <p class="version-label">Mi Progreso Diario · v0.7</p>
     <h2 id="inicioTitle" class="view-title">Inicio</h2>
   <section class="card">
     <div class="head"><h2>Progreso de hoy</h2><span class="muted" id="percentage">0 %</span></div>
@@ -239,10 +241,10 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   </section>
   <section id="aprendizaje" class="app-view" aria-labelledby="aprendizajeTitle" hidden>
     <h2 id="aprendizajeTitle" class="view-title">Aprendizaje</h2>
-    <div class="card coming-soon">
-      <p class="eyebrow">Próximamente</p>
-      <p class="muted">Tu espacio para conectar lo que aprendes con tu día a día.</p>
-    </div>
+    <p class="learning-intro">Aprende una idea. Pruébala en tu realidad. Construye paso a paso.</p>
+    <div class="learning-notice"><strong>Vista previa · Contenido provisional</strong><br>Esta versión presenta la estructura y una lección de demostración. El resto del contenido está pendiente de desarrollo y revisión.</div>
+    <div id="learningRoutes"></div>
+    <noscript><p class="muted">Activa JavaScript para explorar las rutas de aprendizaje.</p></noscript>
   </section>
   <p class="footer">Tus datos se guardan solo en este navegador y dispositivo. No se envían a ningún servidor. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
 </main>
