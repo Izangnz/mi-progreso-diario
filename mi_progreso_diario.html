@@ -227,7 +227,7 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
       if (button.dataset.view === viewId) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    render();
+    refresh();
     window.scrollTo(0, 0);
   }
   navButtons.forEach(button => {
@@ -237,18 +237,85 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   const STORAGE_KEY = "mi-panel-habitos-v1";
   const localDate = () => {const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
   const defaultHabits = ["Leer 15 minutos","Meditar 10 minutos","Aprender algo nuevo","Aplicar lo aprendido"];
+  const initialState = () => ({day:localDate(),habits:defaultHabits.map((name,i)=>({id:i+1,name,done:false})),weeklyGoal:"",history:{}});
+  // Si los datos no se pueden leer, no los sustituimos por hábitos de ejemplo.
   function load() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if(saved && Array.isArray(saved.habits)) return saved;
-    } catch (error) { console.warn("No se pudo leer el almacenamiento:",error); }
-    return {day:localDate(),habits:defaultHabits.map((name,i)=>({id:i+1,name,done:false})),weeklyGoal:""};
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return initialState();
+    const saved = JSON.parse(raw);
+    if (!saved || !/^\d{4}-\d{2}-\d{2}$/.test(saved.day) ||
+        !Array.isArray(saved.habits) || typeof saved.weeklyGoal !== "string" ||
+        !saved.habits.every(h => h && typeof h.name === "string" &&
+          typeof h.done === "boolean" && (typeof h.id === "number" || typeof h.id === "string"))) {
+      throw new Error("Los datos guardados no tienen el formato esperado. No se han sobrescrito.");
+    }
+    if (saved.history === undefined) saved.history = {};
+    if (!saved.history || typeof saved.history !== "object" || Array.isArray(saved.history)) {
+      throw new Error("No se puede leer el historial. No se han sobrescrito los datos.");
+    }
+    return saved;
   }
-  let state=load();
-  function save(){ try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(error){document.getElementById("savedStatus").textContent="Aviso: este navegador no permite guardar los cambios.";} }
-  function resetIfNewDay(){const today=localDate();if(state.day!==today){state.day=today;state.habits.forEach(h=>h.done=false);save();}}
+  let state = initialState();
+  function dailyRecord(habits) {
+    // Copias independientes: eliminar o marcar hábitos mañana no modifica ayer.
+    const copy = habits.map(h => ({...h}));
+    const total = copy.length;
+    const completed = copy.filter(h => h.done).length;
+    return {habits:copy,total,completed,percentage:total ? Math.round(completed/total*100) : null,
+      status:total ? "recorded" : "no-habits"};
+  }
+  function prepareDay(next) {
+    const today = localDate();
+    // No reabrir fechas cerradas si el reloj del dispositivo retrocede.
+    if (next.day > today) throw new Error("Revisa la fecha del dispositivo antes de guardar.");
+    if (!Object.hasOwn(next.history, next.day)) {
+      next.history[next.day] = dailyRecord(next.habits);
+    }
+    if (next.day !== today) {
+      // El registro anterior ya está guardado; los días intermedios quedan sin registro.
+      next.day = today;
+      next.habits = next.habits.map(h => ({...h,done:false}));
+      if (Object.hasOwn(next.history, today)) {
+        throw new Error("Esta fecha ya tiene un registro histórico. No se ha sobrescrito.");
+      }
+    }
+  }
+  async function updateState(change) {
+    try {
+      if (!navigator.locks || !navigator.locks.request) {
+        // Sin bloqueo compartido no podemos garantizar escrituras seguras entre pestañas.
+        state = load();
+        throw new Error("Este navegador no permite guardar de forma segura entre pestañas. Usa una versión actual de Safari.");
+      }
+      await navigator.locks.request(STORAGE_KEY, () => {
+        // Leer DENTRO del bloqueo evita escribir el estado antiguo de otra pestaña.
+        const next = load();
+        const before = JSON.stringify(next);
+        prepareDay(next);
+        if (change) change(next);
+        next.history[next.day] = dailyRecord(next.habits);
+        const after = JSON.stringify(next);
+        // Un único guardado incluye historial y casillas del nuevo día.
+        // Si falla, el estado anterior permanece intacto.
+        if (after !== before || localStorage.getItem(STORAGE_KEY) === null) {
+          localStorage.setItem(STORAGE_KEY, after);
+        }
+        state = next;
+      });
+      document.getElementById("savedStatus").textContent = "Se guarda automáticamente en este navegador.";
+      render();
+      return true;
+    } catch (error) {
+      document.getElementById("savedStatus").textContent = "Aviso: no se han guardado cambios. " + error.message;
+      console.warn("No se pudo guardar el historial:", error);
+      render();
+      return false;
+    }
+  }
+  function refresh() { return updateState(); }
   function render(){
-    resetIfNewDay();
+    const goalField = document.getElementById("weeklyGoal");
+    if (document.activeElement !== goalField) goalField.value = state.weeklyGoal || "";
     document.getElementById("dateLabel").textContent=new Intl.DateTimeFormat("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date());
     const list=document.getElementById("habitsList"); list.replaceChildren();
     if(!state.habits.length){const empty=document.createElement("p");empty.className="empty";empty.textContent="Aún no tienes hábitos. Añade el primero.";list.append(empty);}
@@ -257,15 +324,18 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
       const label=document.createElement("label");
       const check=document.createElement("input");check.type="checkbox";check.checked=habit.done;
 check.addEventListener("change", () => {
-  resetIfNewDay();
-  habit.done = check.checked;
-  save();
-  render();
+  const checked = check.checked;
+  updateState(next => {
+    const current = next.habits.find(h => h.id === habit.id);
+    if (current) current.done = checked;
+  });
 });
       const text=document.createElement("span");text.className="habit-name";text.textContent=habit.name;
       label.append(check,text);
       const del=document.createElement("button");del.type="button";del.className="delete";del.textContent="Eliminar";del.setAttribute("aria-label",`Eliminar ${habit.name}`);
-      del.addEventListener("click",()=>{state.habits=state.habits.filter(h=>h.id!==habit.id);save();render();});
+      del.addEventListener("click",()=>updateState(next => {
+        next.habits = next.habits.filter(h => h.id !== habit.id);
+      }));
       row.append(label,del);list.append(row);
     }
     const count=state.habits.filter(h=>h.done).length, total=state.habits.length;
@@ -283,14 +353,25 @@ felicitacion.hidden = !(
     document.getElementById("progressBar").style.width=`${percentage}%`;
     document.getElementById("progress").setAttribute("aria-valuenow",percentage);
   }
-  document.getElementById("habitForm").addEventListener("submit",event=>{
+  document.getElementById("habitForm").addEventListener("submit",async event=>{
     event.preventDefault();const input=document.getElementById("newHabit");const name=input.value.trim();if(!name)return;
-    state.habits.push({id:Date.now()+Math.random(),name,done:false});input.value="";save();render();
+    const saved = await updateState(next => {
+      next.habits.push({id:Date.now()+Math.random(),name,done:false});
+    });
+    if (saved && input.value.trim() === name) input.value="";
   });
-  const goal=document.getElementById("weeklyGoal");goal.value=state.weeklyGoal||"";
-  goal.addEventListener("input",()=>{state.weeklyGoal=goal.value;save();});
-  document.addEventListener("visibilitychange",()=>{if(!document.hidden)render();});
-  render();
+  const goal=document.getElementById("weeklyGoal");
+  goal.addEventListener("input",()=>{
+    const text = goal.value;
+    updateState(next => { next.weeklyGoal = text; });
+  });
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh();});
+  window.addEventListener("storage",event=>{
+    if (event.key === STORAGE_KEY || event.key === null) refresh();
+  });
+  // También detecta medianoche si la página permanece visible.
+  setInterval(()=>{if(!document.hidden && state.day !== localDate())refresh();},30000);
+  refresh();
 
 </script>
 </body>
