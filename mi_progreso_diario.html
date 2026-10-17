@@ -108,6 +108,7 @@ input[type=text], textarea {
 [hidden] { display: none !important; }
 body { padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
 .view-title { color: #E9D19A; font-size: 22px; margin: 0 0 18px; }
+.version-label { display:table; max-width:100%; margin:0 0 14px; padding:6px 11px; border:1px solid #514A3D; border-radius:100px; background:#1C1E22; color:#DCC08B; font-size:12px; line-height:1.5; }
 .habit label { min-width: 0; }
 .habit-name { overflow-wrap: anywhere; }
 .habit input { flex-shrink: 0; }
@@ -186,6 +187,7 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   <h1>Mi progreso diario 🚀</h1>
   <p class="sub" id="dateLabel"></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
+    <p class="version-label">Mi Progreso Diario · v0.6</p>
     <h2 id="inicioTitle" class="view-title">Inicio</h2>
   <section class="card">
     <div class="head"><h2>Progreso de hoy</h2><span class="muted" id="percentage">0 %</span></div>

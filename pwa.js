@@ -8,6 +8,13 @@
   let applying = false;
   let frozen = [];
   let timeout;
+  const watchedWorkers = new WeakSet();
+
+  function waitingUpdate() {
+    const worker = registration?.waiting;
+    return navigator.serviceWorker.controller && worker &&
+      worker !== navigator.serviceWorker.controller && worker.state === "installed" ? worker : null;
+  }
 
   function unfreeze() {
     clearTimeout(timeout);
@@ -17,21 +24,34 @@
     button.disabled = false;
   }
   function showUpdate() {
-    if (!registration?.waiting) return;
-    banner.hidden = false;
-    message.textContent = "Nueva versión disponible. Puedes actualizar cuando termines.";
+    const waiting = waitingUpdate();
+    banner.hidden = !waiting;
+    if (waiting && !applying) {
+      message.textContent = "Nueva versión disponible. Puedes actualizar cuando termines.";
+    }
+  }
+  function watchWorker(worker) {
+    if (!worker || watchedWorkers.has(worker)) return;
+    watchedWorkers.add(worker);
+    // Esperar al siguiente turno para que registration.waiting refleje el estado nuevo.
+    worker.addEventListener("statechange", () => setTimeout(showUpdate, 0));
   }
   navigator.serviceWorker.addEventListener("message", event => {
     if (event.data?.type !== "UPDATE_BLOCKED") return;
     unfreeze();
+    showUpdate();
     message.textContent = "Cierra las otras ventanas de esta aplicación y vuelve a pulsar Actualizar.";
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     // No recargar automáticamente durante la primera instalación.
-    if (applying) location.reload();
+    const shouldReload = applying;
+    unfreeze();
+    banner.hidden = true;
+    if (shouldReload) location.reload();
   });
   button.addEventListener("click", async () => {
-    if (applying || !registration?.waiting) return;
+    if (applying) return;
+    if (!waitingUpdate()) { showUpdate(); return; }
     applying = true;
     button.disabled = true;
     // Evitar nuevas ediciones mientras esperamos los guardados ya solicitados.
@@ -45,27 +65,34 @@
       if (document.getElementById("savedStatus").textContent.startsWith("Aviso:")) {
         throw new Error("Hay un aviso de guardado. Resuélvelo antes de actualizar.");
       }
-      if (!registration.waiting) { unfreeze(); showUpdate(); return; }
-      registration.waiting.postMessage({type:"APPLY_UPDATE"});
+      const worker = waitingUpdate();
+      if (!worker) { unfreeze(); showUpdate(); return; }
+      worker.postMessage({type:"APPLY_UPDATE"});
       timeout = setTimeout(() => {
         unfreeze();
+        showUpdate();
         message.textContent = "No se pudo completar la actualización. Puedes volver a intentarlo.";
       }, 15000);
     } catch (error) {
       unfreeze();
+      showUpdate();
       message.textContent = error.message;
     }
   });
   navigator.serviceWorker.register("./sw.js", {scope:"./",updateViaCache:"none"}).then(reg => {
     registration = reg;
+    watchWorker(reg.waiting);
+    watchWorker(reg.installing);
     showUpdate();
     reg.addEventListener("updatefound", () => {
-      const installing = reg.installing;
-      installing?.addEventListener("statechange", () => {
-        if (installing.state === "installed") showUpdate();
-      });
+      watchWorker(reg.installing);
+      showUpdate();
     });
-    const check = () => { if (!document.hidden && navigator.onLine) reg.update().catch(console.warn); };
+    const check = () => {
+      if (document.hidden) return;
+      showUpdate();
+      if (navigator.onLine) reg.update().then(showUpdate).catch(console.warn);
+    };
     document.addEventListener("visibilitychange", check);
     window.addEventListener("online", check);
     check();
