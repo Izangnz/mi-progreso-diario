@@ -203,3 +203,11 @@ img.learning-native-media { height:auto; }
 .mission-entry button { width:100%; min-height:48px; }
 .mission-view [hidden] { display:none !important; }
 @media(max-width:420px) { .mission-view .learning-journey-page { padding:16px; } .mission-view .learning-actions { flex-direction:column; } .mission-view .learning-actions button { flex:auto; } }
+
+/* Parche de misión: estas tarjetas no tienen la columna de icono de la lección. */
+@media(max-width:480px) {
+  .mission-view .learning-story-card { grid-template-columns:minmax(0,1fr); }
+  .mission-view .learning-story-card > strong,
+  .mission-view .learning-story-card > span { grid-column:1 / -1; }
+  .mission-view .learning-story-card > strong { overflow-wrap:normal; word-break:normal; hyphens:none; }
+}

@@ -181,7 +181,7 @@ test('la PWA existente conserva caché y actividad offline; no incluye medios gr
   const events={},scope='https://example.test/app/',prefix='mi-progreso-diario:'+scope+':',maps=new Map([[prefix+'anterior',new Map()],['otra-app',new Map()]]);
   const context=vm.createContext({URL,Request,fetch(){throw Error('Sin red');},caches:{async open(key){if(!maps.has(key))maps.set(key,new Map());const map=maps.get(key);return {async addAll(requests){for(const request of requests){assert.equal(request.cache,'reload');const file=new URL(request.url).pathname.slice('/app/'.length)||'index.html';assert.ok(!/\.(mp4|mp3|webm|wav)$/.test(file));map.set(request.url,fs.readFileSync(path.join(ROOT,file)));}},async match(url){return map.get(url);}};},async keys(){return [...maps.keys()];},async delete(key){return maps.delete(key);}},self:{registration:{scope},addEventListener(type,fn){events[type]=fn;},clients:{async claim(){}}}});
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await pending;events.activate({waitUntil(p){pending=p;}});await pending;
-  assert.ok(maps.has(prefix+'0.10.1'));assert.ok(maps.has('otra-app'));
+  assert.ok(maps.has(prefix+'0.10.2'));assert.ok(maps.has('otra-app'));
   for(const file of ['index.html','mi_progreso_diario.html','pwa.js','aprendizaje-contenido.js','aprendizaje.js','aprendizaje-progreso.js','aprendizaje-storage.js','aprendizaje-preferencias.js','aprendizaje.css','misiones-contenido.js','misiones-storage.js','misiones.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
 });
 
@@ -481,8 +481,8 @@ test('Misión enlaza desde Inicio y la lección, con etiquetas accesibles y sin 
   assert.ok(read('aprendizaje.css').includes('.mission-view'));assert.ok(read('pwa.js').includes('window.MPDMission?.hasUnsavedChanges()'));
 });
 
-test('publicación v0.10.1: todos los recursos de ejecución están incluidos en caché',()=>{
-  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.10.1'));assert.ok(sw.includes('const VERSION = "0.10.1"'));
+test('publicación v0.10.2: todos los recursos de ejecución están incluidos en caché',()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.10.2'));assert.ok(sw.includes('const VERSION = "0.10.2"'));
   const files=[...sw.matchAll(/"\.\/([^"\n]+)"/g)].map(m=>m[1]);
   for(const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)){assert.ok(files.includes(match[1]),match[1]);assert.ok(fs.existsSync(path.join(ROOT,match[1])));}
   for(const file of ['misiones-contenido.js','misiones-storage.js','misiones.js'])assert.ok(files.includes(file));
@@ -537,4 +537,17 @@ test('Inicio compacto: orden semántico, pantallas estrechas, horizontal y texto
   assert.ok(!/overflow\s*:\s*hidden|line-clamp|(?:^|[;{])\s*max-height\s*:|height\s*:\s*100(vh|dvh)|position\s*:\s*absolute/.test(compact));
   assert.ok(compact.includes('body:has(#inicio:not([hidden])) #savedStatus:not(.is-error)'));
   assert.ok(html.includes('safe-area-inset-bottom'));assert.ok(html.includes('safe-area-inset-left'));
+});
+
+
+test('misión móvil: títulos sin icono usan todo el ancho y no se parten dentro de las palabras',()=>{
+  const app=makeApp(memory(),{core:true,mission:true});
+  const mission=app.document.getElementById('mission-detective');
+  const titles=mission.querySelectorAll('strong').map(n=>n.textContent);
+  for(const word of ['Observar','Investigar','Reflexionar'])assert.ok(titles.includes(word));
+  const css=read('aprendizaje.css'),patch=css.slice(css.indexOf('/* Parche de misión:'));
+  assert.ok(patch.includes('@media(max-width:480px)'));
+  assert.ok(patch.includes('.mission-view .learning-story-card { grid-template-columns:minmax(0,1fr); }'));
+  assert.ok(patch.includes('grid-column:1 / -1'));assert.ok(patch.includes('overflow-wrap:normal; word-break:normal; hyphens:none;'));
+  assert.ok(!patch.includes('font-size:'));assert.ok(!patch.includes('overflow:hidden'));
 });
