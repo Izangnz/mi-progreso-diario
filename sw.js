@@ -1,11 +1,12 @@
 /* Cambiar VERSION en cada publicación que modifique archivos de la aplicación.
    Mantener este archivo en la misma dirección. Nunca guarda datos personales. */
-const VERSION = "0.7.0";
+const VERSION = "0.8.2";
 const CACHE_PREFIX = `mi-progreso-diario:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const FILES = [
   "./", "./index.html", "./mi_progreso_diario.html", "./pwa.js",
   "./aprendizaje.js", "./aprendizaje.css",
+  "./aprendizaje-contenido.js", "./aprendizaje-storage.js",
   "./manifest.webmanifest", "./icons/apple-touch-icon.png",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png"
 ];
