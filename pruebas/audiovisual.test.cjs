@@ -181,7 +181,7 @@ test('la PWA existente conserva caché y actividad offline; no incluye medios gr
   const events={},scope='https://example.test/app/',prefix='mi-progreso-diario:'+scope+':',maps=new Map([[prefix+'anterior',new Map()],['otra-app',new Map()]]);
   const context=vm.createContext({URL,Request,fetch(){throw Error('Sin red');},caches:{async open(key){if(!maps.has(key))maps.set(key,new Map());const map=maps.get(key);return {async addAll(requests){for(const request of requests){assert.equal(request.cache,'reload');const file=new URL(request.url).pathname.slice('/app/'.length)||'index.html';assert.ok(!/\.(mp4|mp3|webm|wav)$/.test(file));map.set(request.url,fs.readFileSync(path.join(ROOT,file)));}},async match(url){return map.get(url);}};},async keys(){return [...maps.keys()];},async delete(key){return maps.delete(key);}},self:{registration:{scope},addEventListener(type,fn){events[type]=fn;},clients:{async claim(){}}}});
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await pending;events.activate({waitUntil(p){pending=p;}});await pending;
-  assert.ok(maps.has(prefix+'0.10.0'));assert.ok(maps.has('otra-app'));
+  assert.ok(maps.has(prefix+'0.10.1'));assert.ok(maps.has('otra-app'));
   for(const file of ['index.html','mi_progreso_diario.html','pwa.js','aprendizaje-contenido.js','aprendizaje.js','aprendizaje-progreso.js','aprendizaje-storage.js','aprendizaje-preferencias.js','aprendizaje.css','misiones-contenido.js','misiones-storage.js','misiones.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
 });
 
@@ -319,6 +319,7 @@ test('Inicio con lectura inválida o cuota agotada muestra indisponibilidad y co
     const app=makeApp(mem,{core:true,render:false});await startCore(app);
     assert.equal(mem.values.get(HABITS),raw);assert.equal(app.document.getElementById('progressLabel').textContent,'Progreso no disponible');
     assert.ok(app.document.getElementById('savedStatus').textContent.startsWith('Aviso:'));
+    assert.equal(app.document.getElementById('savedStatus').classList.contains('is-error'),true);
     assert.equal(app.document.getElementById('recentActivity').hidden,true);
   }
 });
@@ -480,8 +481,8 @@ test('Misión enlaza desde Inicio y la lección, con etiquetas accesibles y sin 
   assert.ok(read('aprendizaje.css').includes('.mission-view'));assert.ok(read('pwa.js').includes('window.MPDMission?.hasUnsavedChanges()'));
 });
 
-test('publicación v0.10: todos los recursos de ejecución están incluidos en caché',()=>{
-  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.10'));assert.ok(sw.includes('const VERSION = "0.10.0"'));
+test('publicación v0.10.1: todos los recursos de ejecución están incluidos en caché',()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.10.1'));assert.ok(sw.includes('const VERSION = "0.10.1"'));
   const files=[...sw.matchAll(/"\.\/([^"\n]+)"/g)].map(m=>m[1]);
   for(const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)){assert.ok(files.includes(match[1]),match[1]);assert.ok(fs.existsSync(path.join(ROOT,match[1])));}
   for(const file of ['misiones-contenido.js','misiones-storage.js','misiones.js'])assert.ok(files.includes(file));
@@ -513,4 +514,27 @@ test('service worker no fuerza actualizaciones y mantiene caché anterior si fal
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await assert.rejects(pending,/Recurso no disponible/);assert.equal(activated,0);
   events.message({data:{type:'APPLY_UPDATE'},source:{postMessage(message){messages.push(message);}},waitUntil(p){pending=p;}});await pending;assert.equal(messages[0].type,'UPDATE_BLOCKED');assert.equal(activated,0);
   windows=windows.slice(0,1);events.message({data:{type:'APPLY_UPDATE'},waitUntil(p){pending=p;}});await pending;assert.equal(activated,1);
+});
+
+test('Inicio compacto conserva objetivos largos completos y solo resume su presentación',async()=>{
+  const mem=memory(),goal='Objetivo muy largo para revisar con texto ampliado. '.repeat(15);
+  mem.values.set(HABITS,JSON.stringify({day:mem.day,habits:[],weeklyGoal:goal,history:{}}));
+  const app=makeApp(mem,{core:true,render:false});await startCore(app);
+  assert.equal(app.document.getElementById('goalPreview').textContent,goal.trim());assert.equal(app.document.getElementById('weeklyGoal').value,goal);
+  assert.equal(Array.from(app.document.getElementById('goalCompactPreview').textContent).length,71);
+  await app.document.getElementById('editGoal').fire('click');assert.equal(app.document.getElementById('goalEditor').open,true);assert.equal(app.document.activeElement.id,'weeklyGoal');
+  assert.equal(JSON.parse(mem.values.get(HABITS)).weeklyGoal,goal);
+});
+
+test('Inicio compacto: orden semántico, pantallas estrechas, horizontal y texto ampliado sin recortes',()=>{
+  const html=read('mi_progreso_diario.html'),home=html.slice(html.indexOf('<section id="inicio"'),html.indexOf('<section id="habitos"'));
+  const ids=['progressLabel','pendingTitle','dashboardLearningTitle','goalTitle','missionShortcutTitle'];
+  for(let i=1;i<ids.length;i++)assert.ok(home.indexOf('id="'+ids[i-1]+'"')<home.indexOf('id="'+ids[i]+'"'));
+  assert.equal((home.match(/id="weeklyGoal"/g)||[]).length,1);assert.ok(home.includes('<details class="pending-disclosure"'));
+  const compact=html.slice(html.indexOf('/* Inicio compacto:'),html.indexOf('</style>'));
+  assert.ok(compact.includes('@media(max-width:359px)'));assert.ok(compact.includes('@media(max-width:759px)'));assert.ok(compact.includes('(orientation:landscape)'));
+  assert.ok(compact.includes('minmax(0,1fr)'));assert.ok(compact.includes('min-height:44px'));assert.ok(compact.includes('flex-wrap:wrap'));
+  assert.ok(!/overflow\s*:\s*hidden|line-clamp|(?:^|[;{])\s*max-height\s*:|height\s*:\s*100(vh|dvh)|position\s*:\s*absolute/.test(compact));
+  assert.ok(compact.includes('body:has(#inicio:not([hidden])) #savedStatus:not(.is-error)'));
+  assert.ok(html.includes('safe-area-inset-bottom'));assert.ok(html.includes('safe-area-inset-left'));
 });

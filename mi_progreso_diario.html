@@ -224,6 +224,50 @@ body { padding-top:calc(16px + env(safe-area-inset-top,0px)); padding-left:max(1
 @keyframes habit-confirm { from { box-shadow:0 0 0 2px #DCC08B; } to { box-shadow:0 0 0 0 transparent; } }
 @media(prefers-reduced-motion:reduce) { .habit-just-completed { animation:none; } }
 @media(max-width:380px) { #habitForm { grid-template-columns:minmax(0,1fr); } #habitsList .habit { padding:8px; gap:6px; } #habitsList .habit input { margin:7px 3px; } }
+
+/* Inicio compacto: el contenido crece y desplaza con zoom o texto ampliado. */
+.dashboard-heading,.dashboard-welcome { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; }
+#inicio .dashboard-heading { margin:0 0 8px; }
+#inicio .view-title { margin:0; font-size:18px; }
+#inicio .version-label { margin:0; padding:3px 8px; }
+#inicio .dashboard-greeting { margin:0; font-size:22px; }
+#inicio .dashboard-welcome { margin-bottom:12px; }
+#inicio .sub { margin:0; font-size:13px; line-height:1.5; }
+#inicio .dashboard-grid { gap:10px; }
+#inicio .dashboard-grid > .card { padding:14px; }
+#inicio .dashboard-icon { width:18px; height:18px; vertical-align:middle; margin-right:6px; }
+#inicio .dashboard-grid h2 { margin:0 0 6px; font-size:16px; line-height:1.4; }
+#inicio .dashboard-grid p { margin:6px 0; line-height:1.5; overflow-wrap:anywhere; }
+#inicio .dashboard-grid button { min-height:44px; font-size:14px; padding:10px 12px; white-space:normal; overflow-wrap:anywhere; }
+#inicio .dashboard-today { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px 12px; }
+#inicio .dashboard-today .big { font-size:24px; line-height:1.3; margin:0; }
+#inicio .dashboard-percent { color:#E9D19A; font-size:24px; font-weight:750; }
+#inicio .dashboard-today .track { grid-column:1 / -1; margin:0; height:8px; }
+#inicio .pending-disclosure { flex:1 1 140px; min-width:0; }
+#inicio summary { cursor:pointer; min-height:44px; padding:8px 0; color:#E9D19A; line-height:1.5; }
+#inicio summary h2 { display:inline; }
+#inicio .dashboard-hint { display:block; font-size:12px; color:#ACA69D; }
+#inicio .goal-editor { margin:0; }
+#inicio .goal-editor:not([open]) > summary { display:none; }
+#inicio .dashboard-learning button { width:100%; }
+#inicio .dashboard-recent { grid-column:1 / -1; }
+body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px; padding:0; border:0; background:transparent; font-size:13px; }
+@media(max-width:759px) {
+  #inicio .dashboard-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #inicio .dashboard-today,#inicio .dashboard-pending-card,#inicio .dashboard-learning { grid-column:1 / -1; }
+  #inicio .dashboard-objective button,#inicio .dashboard-mission button { width:100%; }
+  #inicio .dashboard-objective:has(details[open]) { grid-column:1 / -1; }
+  #inicio .dashboard-objective:has(details[open]) + .dashboard-mission { grid-column:1 / -1; }
+}
+@media(max-width:359px) {
+  #inicio .dashboard-grid { grid-template-columns:minmax(0,1fr); }
+  #inicio .dashboard-heading,#inicio .dashboard-welcome { align-items:flex-start; }
+}
+@media(max-height:500px) and (orientation:landscape) {
+  #inicio .dashboard-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #inicio .dashboard-grid > .card { grid-column:auto; }
+  #inicio .dashboard-recent,#inicio .dashboard-objective:has(details[open]) { grid-column:1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -237,40 +281,42 @@ body { padding-top:calc(16px + env(safe-area-inset-top,0px)); padding-left:max(1
   <p class="global-save-status" id="learningGlobalStatus" role="status" hidden></p>
   <p class="global-save-status" id="missionGlobalStatus" role="status" hidden></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <p class="version-label">Mi Progreso Diario · v0.10</p>
-    <h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2>
-    <p id="greeting" class="dashboard-greeting"></p>
-    <p class="sub" id="dateLabel"></p>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.10.1</p></div>
+    <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
-  <section class="card">
-    <div class="head"><h2>Progreso de hoy</h2><span class="muted" id="percentage">—</span></div>
-    <div class="big" id="progressLabel">Comprobando progreso…</div>
-    <div class="track" role="progressbar" aria-label="Progreso de hábitos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress" hidden><div class="fill" id="progressBar"></div></div>
-  </section>
-  <section class="card" aria-labelledby="pendingTitle">
-    <div class="head"><h2 id="pendingTitle">Pendientes de hoy</h2><button type="button" id="viewAllHabits" class="secondary-action">Ver todos</button></div>
-    <ul id="pendingHabits" class="dashboard-pending"></ul>
-    <p id="pendingStatus" class="muted"></p>
-  </section>
-  <section class="card" aria-labelledby="goalTitle">
-    <h2 id="goalTitle">Tu objetivo semanal</h2>
-    <p id="goalPreview" class="dashboard-goal"></p>
-    <button type="button" id="editGoal" class="secondary-action">Ver o editar objetivo</button>
-    <details id="goalEditor" class="goal-editor"><summary>Editor del objetivo semanal</summary>
-    <label for="weeklyGoal">Mi objetivo de esta semana</label>
-    <textarea id="weeklyGoal" maxlength="1000" placeholder="Ej.: Construir mi primera aplicación y comprender cómo funciona."></textarea>
-    </details>
-  </section>
-  <section class="card" aria-labelledby="dashboardLearningTitle">
-    <h2 id="dashboardLearningTitle">Continuar aprendiendo</h2>
-    <p id="dashboardLearningText" class="muted">Preparando tu siguiente paso…</p>
-    <button type="button" id="dashboardLearningButton" disabled>Continuar aprendiendo</button>
-    <div class="mission-entry"><p class="muted">Llévalo a la vida real · Práctica opcional</p><button type="button" id="dashboardMissionButton" class="secondary-action">Probar Detective de problemas</button></div>
-  </section>
-  <section id="recentActivity" class="card" aria-labelledby="recentTitle" hidden>
-    <h2 id="recentTitle">Actividad reciente</h2><p id="recentSummary" class="muted"></p>
-  </section>
-  </div>
+      <section class="card dashboard-today" aria-labelledby="todayTitle">
+        <div class="dashboard-today-copy"><h2 id="todayTitle">Progreso de hoy</h2><div class="big" id="progressLabel">Comprobando progreso…</div></div>
+        <span class="muted dashboard-percent" id="percentage">—</span>
+        <div class="track" role="progressbar" aria-label="Progreso de hábitos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress" hidden><div class="fill" id="progressBar"></div></div>
+      </section>
+      <section class="card dashboard-pending-card" aria-labelledby="pendingTitle">
+        <div class="head"><details class="pending-disclosure"><summary><h2 id="pendingTitle">Pendientes de hoy</h2><span class="dashboard-hint">Ver resumen</span></summary><ul id="pendingHabits" class="dashboard-pending"></ul></details><button type="button" id="viewAllHabits" class="secondary-action">Ir a Hábitos</button></div>
+        <p id="pendingStatus" class="muted"></p>
+      </section>
+      <section class="card dashboard-learning" aria-labelledby="dashboardLearningTitle">
+        <h2 id="dashboardLearningTitle"><svg class="nav-icon dashboard-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg>Continuar aprendiendo</h2>
+        <p id="dashboardLearningText" class="muted">Preparando tu siguiente paso…</p>
+        <button type="button" id="dashboardLearningButton" disabled>Continuar aprendiendo</button>
+      </section>
+      <section class="card dashboard-objective" aria-labelledby="goalTitle">
+        <h2 id="goalTitle"><svg class="nav-icon dashboard-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V3m0 1h14l-3 4 3 4H4"/></svg>Objetivo semanal</h2>
+        <p id="goalCompactPreview" class="muted"></p>
+        <details id="goalEditor" class="goal-editor"><summary>Ver objetivo</summary>
+          <p id="goalPreview" class="dashboard-goal"></p>
+          <label for="weeklyGoal">Mi objetivo de esta semana</label>
+          <textarea id="weeklyGoal" maxlength="1000" placeholder="¿Qué quieres conseguir esta semana?"></textarea>
+        </details>
+        <button type="button" id="editGoal" class="secondary-action">Ver o editar</button>
+      </section>
+      <section class="card dashboard-mission" aria-labelledby="missionShortcutTitle">
+        <h2 id="missionShortcutTitle"><svg class="nav-icon dashboard-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm6-2 6 6"/></svg>Detective de problemas</h2>
+        <p class="muted">Práctica en la vida real</p>
+        <button type="button" id="dashboardMissionButton" class="secondary-action">Probar Detective de problemas</button>
+      </section>
+      <details id="recentActivity" class="card dashboard-recent" hidden>
+        <summary><h2 id="recentTitle">Actividad reciente</h2></summary><p id="recentSummary" class="muted"></p>
+      </details>
+    </div>
   </section>
   <section id="habitos" class="app-view" aria-labelledby="habitosTitle" hidden>
     <h2 id="habitosTitle" class="view-title">Hábitos</h2>
@@ -583,6 +629,7 @@ body { padding-top:calc(16px + env(safe-area-inset-top,0px)); padding-left:max(1
     document.getElementById("habitsSummaryStatus").textContent=!dashboardReliable ? "Revisa el aviso de guardado antes de continuar." : !total ? "Añade tu primer hábito. Aún no hay un porcentaje que valorar." : count===total ? "Todos los hábitos de hoy están completados." : `${total-count} pendientes · Se conserva tu orden habitual.`;
   }
   function render(){
+    document.getElementById("savedStatus").classList.toggle("is-error",!dashboardReliable || goalDraftPending);
     const goalField = document.getElementById("weeklyGoal");
     if (!goalDraftPending && document.activeElement !== goalField) goalField.value = state.weeklyGoal || "";
     document.getElementById("dateLabel").textContent=new Intl.DateTimeFormat("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date());
@@ -630,6 +677,7 @@ felicitacion.hidden = !(
       document.getElementById("percentage").textContent="—";
       document.getElementById("pendingStatus").textContent="No podemos confirmar tus pendientes. Revisa el aviso de guardado.";
       document.getElementById("goalPreview").textContent="Objetivo no disponible. El editor conserva los cambios pendientes.";
+      document.getElementById("goalCompactPreview").textContent="Objetivo no disponible.";
       return;
     }
     if(!state.habits.length){
@@ -638,8 +686,11 @@ felicitacion.hidden = !(
     }
     const remaining=state.habits.filter(h=>!h.done);
     remaining.slice(0,3).forEach(h=>{const item=document.createElement("li");item.textContent=h.name;pending.append(item);});
-    document.getElementById("pendingStatus").textContent=!state.habits.length ? "Añade tu primer hábito en Hábitos." : !remaining.length ? "Has completado todos los hábitos de hoy." : remaining.length>3 ? `Hay ${remaining.length} pendientes; aquí ves los tres primeros.` : `${remaining.length} hábitos pendientes.`;
+    document.getElementById("pendingStatus").textContent=!state.habits.length ? "Añade tu primer hábito en Hábitos." : !remaining.length ? "Has completado todos los hábitos de hoy." : remaining.length>3 ? `Hay ${remaining.length} pendientes; abre el resumen para consultar hasta tres.` : `${remaining.length} hábitos pendientes.`;
     document.getElementById("goalPreview").textContent=state.weeklyGoal.trim() || "Todavía no has escrito un objetivo.";
+    // Vista breve; el texto íntegro y su editor permanecen en el desplegable.
+    const goalCharacters=Array.from(state.weeklyGoal.trim());
+    document.getElementById("goalCompactPreview").textContent=goalCharacters.length ? goalCharacters.slice(0,70).join("")+(goalCharacters.length>70 ? "…" : "") : "Sin objetivo todavía.";
     const dates=weekDatesForRecent();
     const records=dates.map(day=>dayStats(day)).filter(d=>["recorded","zero"].includes(d.kind));
     if(records.length>=2){

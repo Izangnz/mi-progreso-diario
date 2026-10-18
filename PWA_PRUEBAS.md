@@ -1,6 +1,9 @@
-# Mi Progreso Diario · PWA v0.10
+# Mi Progreso Diario · PWA v0.10.1
 
-Versión visible: **v0.10**. Caché: **0.10.0**.
+Versión visible: **v0.10.1**. Caché: **0.10.1**.
+
+Inicio compacto: progreso horizontal, accesos prioritarios y detalles secundarios desplegables.
+El contenido permite desplazamiento normal con texto ampliado o pantallas pequeñas.
 
 Incluye el dashboard de Inicio, navegación, tarjetas de hábitos, aprendizaje visual
 interactivo, arquitectura audiovisual y el piloto Detective de problemas.
@@ -14,7 +17,7 @@ No requiere cuentas, paquetes de terceros ni servicios de pago.
 4. Espera el aviso «Nueva versión disponible». Si no aparece, cambia a otra aplicación
    y vuelve a Mi Progreso Diario: se comprueba al recuperar visibilidad y conexión.
 5. Pulsa Actualizar. Se espera el fin de los guardados y se recarga al activar la versión.
-6. Confirma «Mi Progreso Diario · v0.10» en Inicio. Comprueba hábitos, objetivo,
+6. Confirma «Mi Progreso Diario · v0.10.1» en Inicio. Comprueba hábitos, objetivo,
    estadísticas, respuestas y progreso; la misión no modifica las respuestas anteriores.
 7. Si no aparece el aviso, cierra la app y vuelve a abrirla con conexión. Si sigue
    sin aparecer, revisa que GitHub Pages haya terminado de publicar. No borres datos
