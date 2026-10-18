@@ -34,13 +34,17 @@
   const notice = node("p","learning-storage-status");
   notice.setAttribute("role","status");
   container.append(notice);
+  let storageProblem = false;
   function read() {
     try {
       const data = store.read();
+      storageProblem = false;
       notice.textContent = "Respuestas y progreso guardados solo en este dispositivo. Pulsa Guardar para conservar cada respuesta.";
       notice.classList.remove("learning-error");
       return data;
     } catch (error) {
+      storageProblem = true;
+      notice.hidden = false;
       notice.textContent = "No se pueden leer los datos educativos. No se han borrado. " + error.message;
       notice.classList.add("learning-error");
       return null;
@@ -52,8 +56,137 @@
     progressViews.forEach(update => update());
     completionViews.forEach(update => update());
   }
+  // Las vistas se construyen una sola vez: ocultarlas conserva los borradores.
+  const preferences = window.MPDLearningPreferences;
+  const screens = new Map(), targetScreens = new Map(), modeViews = [];
+  let currentScreen = "learning-home";
+  let chosenModes = {};
+  const preferenceNotice = node("p","learning-save-status");
+  preferenceNotice.setAttribute("role","status");preferenceNotice.hidden=true;
+  container.append(preferenceNotice);
+  function preferenceError(error) {
+    preferenceNotice.hidden=false;
+    preferenceNotice.textContent="La modalidad está disponible durante esta sesión, pero no se ha guardado. "+error.message;
+  }
+  try { chosenModes={...preferences.read().routes}; }
+  catch(error) { preferenceNotice.hidden=false;preferenceNotice.textContent="No se han podido leer las modalidades. Puedes elegir una para esta sesión. "+error.message; }
+  function makeScreen(id,title,back) {
+    const element=node("section","learning-screen");element.id=id;element.hidden=true;
+    const header=node("div","learning-screen-header");
+    if(back){const buttonBack=button("← Volver",true);buttonBack.addEventListener("click",back);header.append(buttonBack);}
+    const heading=node("h3","learning-screen-title",title);heading.tabIndex=-1;
+    heading.id=id+"-title";element.setAttribute("aria-labelledby",heading.id);
+    header.append(heading);element.append(header);container.append(element);
+    screens.set(id,{element,heading});return element;
+  }
+  function showScreen(id,focus=true) {
+    const selected=screens.get(id);if(!selected)return;
+    screens.forEach((screen,key)=>{screen.element.hidden=key!==id;});currentScreen=id;
+    notice.hidden=!storageProblem && !id.startsWith("lesson-");
+    if(focus){selected.heading.focus({preventScroll:true});selected.element.scrollIntoView({block:"start",behavior:"auto"});}
+  }
+  const routeScreenId=routeId=>"route-"+routeId;
+  const moduleScreenId=(routeId,moduleId)=>`${routeId}-${moduleId}`;
+  const lessonScreenId=key=>"lesson-"+key.replaceAll("/","-");
+  const modeChoosers=new Map();
+  function updateModes(){modeViews.forEach(update=>update());}
+  function openChooser(routeId,after) {
+    const chooser=modeChoosers.get(routeId);
+    chooser.back=currentScreen;chooser.after=after;showScreen(chooser.id);
+  }
+  function ensureMode(routeId,after) {
+    if(chosenModes[routeId])after();else openChooser(routeId,after);
+  }
+  function jumpTo(id) {
+    const destination=targetScreens.get(id);if(!destination)return;
+    ensureMode(destination.routeId,()=>{
+      showScreen(destination.screenId);
+      const resolved=destination.showStep ? destination.showStep() || id : id;
+      const target=document.getElementById(resolved);if(!target)return;
+      for(let parent=target;parent;parent=parent.parentElement){if(parent.tagName==="DETAILS")parent.open=true;}
+      target.tabIndex=-1;target.focus({preventScroll:true});
+      target.scrollIntoView({block:"start",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+    });
+  }
+  function modeBar(route) {
+    const bar=node("div","learning-mode-bar"),text=node("span","learning-input-hint");
+    const change=button("Cambiar modalidad",true);
+    change.addEventListener("click",()=>{const previous=currentScreen;openChooser(route.id,()=>showScreen(previous));});
+    modeViews.push(()=>{text.textContent="Modalidad: "+(preferences.modes[chosenModes[route.id]] || "Por elegir");});
+    bar.append(text,change);return bar;
+  }
+  function buildChooser(route) {
+    const id="mode-"+route.id,chooser={id,back:"learning-explore",after:()=>showScreen(routeScreenId(route.id))};
+    modeChoosers.set(route.id,chooser);
+    const view=makeScreen(id,"¿Cómo quieres aprender?",()=>showScreen(chooser.back));
+    view.append(node("p","muted","El contenido es el mismo. Solo cambia cómo navegas; puedes cambiar de modalidad cuando quieras."));
+    const descriptions={guided:"Un paso cada vez: concepto, ejemplo, práctica y pregunta.",quick:"Resumen y accesos rápidos a cada paso, concepto y ejercicio.",free:"Todos los módulos y pasos abiertos a tu elección, sin bloqueos."};
+    const choices=[];let choosing=false;
+    Object.entries(preferences.modes).forEach(([mode,label])=>{
+      const choice=button("",true);choice.className+=" learning-mode-choice";
+      choice.append(node("strong","",label),node("span","",descriptions[mode]));
+      choice.addEventListener("click",async()=>{
+        if(choosing)return;choosing=true;choices.forEach(item=>{item.disabled=true;});
+        try {const saved=await preferences.save(route.id,mode);chosenModes={...saved.routes};preferenceNotice.hidden=true;}
+        catch(error){chosenModes[route.id]=mode;preferenceError(error);}
+        finally {choosing=false;choices.forEach(item=>{item.disabled=false;});}
+        updateModes();
+        if(currentScreen===id)chooser.after();
+      });
+      choices.push(choice);view.append(choice);
+      modeViews.push(()=>{choice.setAttribute("aria-pressed",String(chosenModes[route.id]===mode));});
+    });
+  }
+  function practiceDetails(route) {
+    const box=node("section","card learning-practice-progress");
+    const label=node("p","learning-progress-label"),bar=node("progress"),detail=node("p","learning-input-hint");
+    bar.max=100;bar.setAttribute("aria-label","Práctica escrita de demostración");
+    box.append(node("h4","learning-dashboard-title",route.title),label,bar,detail,node("p","learning-input-hint","Las respuestas guardadas no acreditan dominio del tema. La demostración no completa la ruta; las autoevaluaciones son repetibles y no guardan intentos."));
+    const achievements=panel("Tus tres logros de práctica",[]),list=node("ul","learning-achievements");
+    const status=node("p","learning-save-status");status.setAttribute("role","status");
+    achievements.children[1].append(node("p","learning-input-hint","Reflejan tus acciones guardadas actuales. No son certificados."),list,status);box.append(achievements);
+    let previous=null;
+    progressViews.push(()=>{
+      if(!data){label.textContent="Progreso no disponible. Revisa el aviso de almacenamiento.";return;}
+      const model=window.MPDLearningProgress.describe(route,data);
+      label.textContent=`${model.saved}/${model.activities.length} respuestas de demostración guardadas`;
+      bar.value=model.activities.length ? Math.round(model.saved/model.activities.length*100) : 0;
+      bar.setAttribute("aria-valuetext",label.textContent);
+      const completed=model.published.filter(item=>item.marked).length;
+      detail.textContent=`${model.demos.filter(item=>item.marked).length}/${model.demos.length} demostraciones marcadas. Formación publicada: ${model.published.length ? completed+"/"+model.published.length+" lecciones" : "todavía no hay lecciones publicadas"}.`;
+      list.replaceChildren();
+      model.badges.forEach(badge=>{
+        const item=node("li",`learning-achievement${badge.earned ? " is-earned" : ""}`);
+        item.append(node("span","learning-achievement-state",badge.earned ? "✓ Obtenido" : "Pendiente"),node("strong","",badge.title),node("span","",badge.description));list.append(item);
+      });
+      const earned=new Set(model.badges.filter(badge=>badge.earned).map(badge=>badge.id));
+      achievements.children[0].textContent=`Tus logros · ${earned.size}/${model.badges.length}`;
+      if(previous)status.textContent=model.badges.filter(badge=>badge.earned&&!previous.has(badge.id)).map(badge=>"Logro obtenido: "+badge.title).join(". ");
+      previous=earned;
+    });return box;
+  }
+  function routeMap(route) {
+    const nav=node("nav","learning-map");nav.setAttribute("aria-label","Módulos de "+route.title);
+    const list=node("ol","learning-map-list");nav.append(node("h4","learning-dashboard-title","Tu recorrido"),node("p","learning-input-hint","Orden recomendado del 01 al 06. Entra libremente en cualquier módulo."),list);
+    route.modules.forEach((module,index)=>{
+      const item=node("li","learning-map-item"),entry=button("",true);entry.className+=" learning-map-button";
+      const copy=node("span","learning-map-copy"),state=node("span","learning-map-state");
+      copy.append(node("span","learning-map-title",module.title),node("span","learning-map-level",module.level),state);
+      entry.append(node("span","learning-map-number",String(index+1).padStart(2,"0")),copy);
+      const target=moduleScreenId(route.id,module.id);entry.setAttribute("aria-controls",target);
+      entry.addEventListener("click",()=>showScreen(target));item.append(entry);list.append(item);
+      progressViews.push(()=>{
+        const model=window.MPDLearningProgress.describe(route,data);
+        const lessons=model.entries.filter(item=>item.module.id===module.id);
+        const total=lessons.reduce((sum,item)=>sum+item.exercises.length,0),saved=lessons.reduce((sum,item)=>sum+item.saved,0);
+        state.textContent=!lessons.length ? "En preparación · Explorar" : (lessons.every(item=>item.lesson.status==="demo") ? "Demostración" : "Disponible")+(data ? ` · ${saved}/${total} respuestas` : " · Progreso no disponible");
+        entry.classList.toggle("learning-map-done",!!data&&lessons.length>0&&lessons.every(item=>item.marked&&item.saved===item.exercises.length));
+      });
+    });return nav;
+  }
   function exerciseView(exercise,key) {
     const box = node("section","learning-exercise");
+    box.id = `practice-${key.replaceAll("/","-")}`;
     const label = node("label","learning-exercise-label",exercise.prompt);
     const input = node("textarea","learning-answer");
     input.id = "answer-" + key.replaceAll("/","-");
@@ -124,7 +257,7 @@
       const latest = read();
       if (!latest) return;
       if (dirty.has(key) && !window.confirm("Se sustituirá el borrador de este campo por la respuesta guardada. ¿Continuar?")) return;
-      data = latest; applySaved(latest.answers[key]); preview.hidden = true;
+      data = latest; applySaved(latest.answers[key]); preview.hidden = true; refreshProgress();
     });
     editors.push(latest => {
       if (!saving && !editing) applySaved(latest.answers[key]);
@@ -174,6 +307,7 @@
   }
   function completionView(lesson,key) {
     const box = node("div","learning-completion");
+    box.id = `completion-${key.replaceAll("/","-")}`;
     const demo = lesson.status !== "published";
     const toggle = button("");
     const status = node("p","learning-save-status"); status.setAttribute("role","status");
@@ -197,77 +331,123 @@
     return box;
   }
   function lessonView(lesson,routeId,moduleId) {
-    const key = `${routeId}/${moduleId}/${lesson.id}`;
-    const article = node("article");
-    const title = node("h4","",lesson.title); title.id = key.replaceAll("/","-");
-    article.setAttribute("aria-labelledby",title.id);
-    article.append(node("p","learning-provisional",lesson.status === "published" ? "Lección disponible" : "Demostración interactiva · Contenido provisional"),title,node("p","muted",lesson.duration));
-    article.append(panel("Resumen rápido",[list(lesson.summary)]),node("p","learning-input-hint",lesson.practice.intro));
-    // Cada paso presenta únicamente su explicación, ejemplo y actividades relacionadas.
-    lesson.explanation.forEach((part,index) => {
-      const contents = [node("h5","","El concepto")];
-      part.paragraphs.forEach(text => contents.push(node("p","",text)));
-      contents.push(node("h5","","Un ejemplo sencillo"),node("blockquote","",part.example),node("h5","","Ponlo en práctica"));
-      part.exercises.forEach(id => {
-        const exercise = lesson.practice.exercises.find(item => item.id === id);
-        contents.push(exerciseView(exercise,`${key}/${exercise.id}`));
+    const key=`${routeId}/${moduleId}/${lesson.id}`,screenId=lessonScreenId(key);
+    const article=node("article");
+    const title=node("h4","",lesson.title);title.id=key.replaceAll("/","-");article.setAttribute("aria-labelledby",title.id);
+    article.append(node("p","learning-provisional",lesson.status==="published" ? "Lección disponible" : "Demostración interactiva · Contenido provisional"),title,node("p","muted",lesson.duration));
+    const summary=panel("Resumen rápido",[list(lesson.summary)]);
+    article.append(summary,node("p","learning-input-hint",lesson.practice.intro));
+    const quick=node("nav","learning-quick-links");quick.setAttribute("aria-label","Accesos a los pasos de la lección");article.append(quick);
+    const stepPanels=[];let step=0,lastMode;
+    const controls=node("div","learning-step-controls"),previous=button("← Paso anterior",true),next=button("Siguiente paso →"),counter=node("p","learning-input-hint");
+    function applyMode() {
+      const mode=chosenModes[routeId] || "guided";
+      const changed=mode!==lastMode;
+      summary.open=mode==="quick" ? true : changed ? false : summary.open;
+      quick.hidden=mode!=="quick";controls.hidden=mode!=="guided";
+      stepPanels.forEach((part,index)=>{
+        part.hidden=mode==="guided" && index!==step;
+        if(mode==="guided")part.open=true;
+        else if(changed)part.open=index===0 && mode==="free";
       });
-      const questions = part.questions.map(id => lesson.quiz.find(item => item.id === id));
-      contents.push(node("h5","","Comprueba lo aprendido"),quizView(questions,key));
-      article.append(panel(`Paso ${part.title}`,contents,index===0));
+      previous.disabled=step===0;next.disabled=step===stepPanels.length-1;
+      counter.textContent=`Paso ${step+1} de ${stepPanels.length} · Puedes volver o explorar sin bloqueos.`;
+      completion.hidden=mode==="guided" && step!==stepPanels.length-1;
+      lastMode=mode;
+    }
+    function reveal(index) {step=index;applyMode();return chosenModes[routeId]==="guided" ? stepPanels[index].id : null;}
+    function navigateStep(index) {
+      if(index<0||index>=stepPanels.length)return;
+      reveal(index);stepPanels[index].tabIndex=-1;stepPanels[index].focus({preventScroll:true});stepPanels[index].scrollIntoView({block:"start",behavior:"auto"});
+    }
+    lesson.explanation.forEach((part,index)=>{
+      const contents=[node("h5","","El concepto")];part.paragraphs.forEach(text=>contents.push(node("p","",text)));
+      contents.push(node("h5","","Un ejemplo sencillo"),node("blockquote","",part.example),node("h5","","Ponlo en práctica"));
+      part.exercises.forEach(id=>{
+        const exercise=lesson.practice.exercises.find(item=>item.id===id);
+        contents.push(exerciseView(exercise,`${key}/${exercise.id}`));
+        targetScreens.set(`practice-${key.replaceAll("/","-")}-${id}`,{routeId,screenId,showStep:()=>reveal(index)});
+      });
+      contents.push(node("h5","","Comprueba lo aprendido"),quizView(part.questions.map(id=>lesson.quiz.find(item=>item.id===id)),key));
+      const view=panel(`Paso ${part.title}`,contents,index===0);view.id=`step-${key.replaceAll("/","-")}-${index}`;
+      view.classList.add("learning-lesson-step");stepPanels.push(view);article.append(view);
+      const link=button(`Paso ${index+1}`,true);link.addEventListener("click",()=>{view.open=true;view.tabIndex=-1;view.focus({preventScroll:true});view.scrollIntoView({block:"start",behavior:"auto"});});quick.append(link);
+      const practiceLink=button(`Práctica ${index+1}`,true);practiceLink.addEventListener("click",()=>jumpTo(`practice-${key.replaceAll("/","-")}-${part.exercises[0]}`));quick.append(practiceLink);
     });
-    article.append(node("p","muted",lesson.practice.outcome));
-    article.append(completionView(lesson,key));
+    const completion=completionView(lesson,key);
+    targetScreens.set(`completion-${key.replaceAll("/","-")}`,{routeId,screenId,showStep:()=>{reveal(stepPanels.length-1);return null;}});
+    previous.addEventListener("click",()=>navigateStep(step-1));next.addEventListener("click",()=>navigateStep(step+1));controls.append(counter,previous,next);
+    article.append(controls,node("p","muted",lesson.practice.outcome),completion);
+    modeViews.push(applyMode);
     return article;
   }
-  routes.forEach(route => {
-    const section = node("section","learning-route");
-    const heading = node("h3","",route.title); heading.id = `route-${route.id}`;
-    section.setAttribute("aria-labelledby",heading.id);
-    const intro = node("div","card");
-    const levels = node("ul","learning-levels"); levels.setAttribute("aria-label","Niveles orientativos");
-    ["Principiante","Intermedio","Avanzado"].forEach(level => levels.append(node("li","learning-badge",level)));
-    const progress = node("div","learning-progress");
-    const label = node("p","learning-progress-label");
-    const bar = node("progress"); bar.max = 100;
-    bar.setAttribute("aria-label","Progreso de lecciones publicadas de la ruta");
-    const detail = node("p","learning-input-hint");
-    progress.append(label,bar,detail);
-    progressViews.push(() => {
-      const lessons = route.modules.flatMap(module => module.lessons.map(lesson => ({lesson,key:`${route.id}/${module.id}/${lesson.id}`})));
-      const published = lessons.filter(item => item.lesson.status === "published");
-      const count = published.filter(item => data?.completed[item.key]).length;
-      const demos = lessons.filter(item => item.lesson.status === "demo");
-      const practiced = demos.filter(item => data?.completed[item.key]).length;
-      bar.value = published.length ? Math.round(count/published.length*100) : 0;
-      bar.setAttribute("aria-valuetext",published.length ? `${count} de ${published.length} lecciones publicadas completadas` : "Sin lecciones publicadas todavía");
-      label.textContent = published.length ? `${count} de ${published.length} lecciones publicadas · ${bar.value} %` : "Ruta en preparación · Sin lecciones publicadas";
-      detail.textContent = `${demos.length} demostración disponible · ${practiced} practicada. Los módulos en preparación y las demostraciones no cuentan para el porcentaje de la ruta.`;
-    });
-    intro.append(node("p","eyebrow",`Ruta práctica · ${route.modules.length} módulos`),heading,node("p","muted",route.description),levels,node("p","learning-order","Los niveles son orientativos: explora sin bloqueos. Si empiezas de cero, sigue el orden del 01 al 06."),progress);
-    section.append(intro);
-    route.modules.forEach((module,index) => {
-      const details = node("details","learning-module"); details.open = index === 0;
-      const summary = node("summary");
-      const label = node("span","learning-module-heading");
-      label.append(node("span","learning-module-name",module.title),node("span","learning-badge",module.level));
-      const publishedCount = module.lessons.filter(lesson => lesson.status === "published").length;
-      const demoCount = module.lessons.filter(lesson => lesson.status === "demo").length;
-      const availability = module.lessons.length ? [
-        publishedCount ? `${publishedCount} lecciones disponibles` : "",
-        demoCount ? `${demoCount} demostración disponible` : ""
-      ].filter(Boolean).join(" · ") || "Contenido en preparación" : "En preparación";
-      label.append(node("span","learning-availability",availability));
-      summary.append(node("span","learning-number",String(index+1).padStart(2,"0")),label);
-      const body = node("div","learning-module-body"); body.append(node("p","",module.description));
-      if (module.lessons.length) module.lessons.forEach(lesson => body.append(lessonView(lesson,route.id,module.id)));
-      else body.append(node("p","learning-provisional","Contenido provisional · Lecciones en preparación"),node("p","","Este módulo se puede explorar libremente. Sus lecciones aún no están disponibles y no cuentan como progreso."));
-      details.append(summary,body); section.append(details);
-    });
-    container.append(section);
+  // Portada: solo tres puntos de entrada. Los formularios viven en vistas propias.
+  const home=makeScreen("learning-home","Aprende a tu ritmo");
+  const continueCard=node("section","card learning-next"),continueTitle=node("h4","learning-dashboard-title","Continuar aprendiendo"),continueText=node("p","muted"),continueButton=button("Continuar");
+  continueCard.append(continueTitle,continueText,continueButton);home.append(continueCard);
+  const exploreCard=node("section","card"),exploreButton=button("Explorar rutas",true);
+  exploreCard.append(node("h4","learning-dashboard-title","Explorar rutas"),node("p","muted","Emprendimiento y nuevas áreas por descubrir."),exploreButton);home.append(exploreCard);
+  const progressCard=node("section","card"),compactProgress=node("p","muted"),progressButton=button("Ver mi progreso",true);
+  progressCard.append(node("h4","learning-dashboard-title","Mi progreso"),compactProgress,progressButton);home.append(progressCard);
+  const explore=makeScreen("learning-explore","Explorar rutas",()=>showScreen("learning-home"));
+  const progressPage=makeScreen("learning-progress","Mi progreso",()=>showScreen("learning-home"));
+  exploreButton.addEventListener("click",()=>showScreen("learning-explore"));progressButton.addEventListener("click",()=>showScreen("learning-progress"));
+  let continueDestination;
+  continueButton.addEventListener("click",()=>{if(continueDestination)jumpTo(continueDestination);});
+  progressViews.push(()=>{
+    if(!data){continueText.textContent="No se pudo leer tu progreso. Revisa el aviso antes de continuar.";continueButton.disabled=true;compactProgress.textContent="Progreso no disponible.";return;}
+    const models=routes.map(route=>({route,model:window.MPDLearningProgress.describe(route,data)}));
+    const active=models.find(item=>item.model.entries.some(lesson=>!lesson.marked||lesson.saved<lesson.exercises.length)) || models.find(item=>item.model.entries.length);
+    continueButton.disabled=!active;
+    continueDestination=active?.model.next.target;
+    continueText.textContent=active ? `${active.route.title} · ${active.model.next.title}` : "Todavía no hay actividades disponibles.";
+    const saved=models.reduce((sum,item)=>sum+item.model.saved,0),total=models.reduce((sum,item)=>sum+item.model.activities.length,0),badges=models.reduce((sum,item)=>sum+item.model.badges.filter(badge=>badge.earned).length,0);
+    compactProgress.textContent=`${saved}/${total} respuestas de demostración · ${badges} logros obtenidos`;
   });
+  routes.forEach(route=>{
+    buildChooser(route);
+    const entry=node("section","card learning-route-entry"),enter=button("Entrar en la ruta");
+    entry.append(node("p","eyebrow","Ruta activa · Demostración provisional"),node("h4","learning-dashboard-title",route.title),node("p","muted",route.description),enter);explore.append(entry);
+    enter.addEventListener("click",()=>ensureMode(route.id,()=>showScreen(routeScreenId(route.id))));
+    const routePage=makeScreen(routeScreenId(route.id),route.title,()=>showScreen("learning-explore"));
+    routePage.classList.add("learning-route");
+    const intro=node("section","card");
+    intro.append(node("p","muted",route.description),node("p","learning-badge","Principiante → Avanzado · Niveles orientativos"),node("p","learning-provisional","Contenido provisional. Una demostración disponible; otros módulos en preparación."),modeBar(route));
+    const brief=node("p","learning-input-hint");intro.append(brief);routePage.append(intro,routeMap(route));
+    progressViews.push(()=>{
+      if(!data){brief.textContent="Progreso no disponible.";return;}
+      const model=window.MPDLearningProgress.describe(route,data);
+      brief.textContent=`Práctica: ${model.saved}/${model.activities.length} respuestas guardadas. Formación publicada: ${model.published.length ? model.published.filter(item=>item.marked).length+"/"+model.published.length+" lecciones" : "todavía no hay lecciones publicadas"}.`;
+    });
+    progressPage.append(practiceDetails(route));
+    route.modules.forEach((module,index)=>{
+      const moduleId=moduleScreenId(route.id,module.id);
+      const modulePage=makeScreen(moduleId,module.title,()=>showScreen(routeScreenId(route.id)));
+      targetScreens.set(moduleId,{routeId:route.id,screenId:moduleId});
+      modulePage.append(node("p","eyebrow",`Módulo ${String(index+1).padStart(2,"0")} · ${module.level}`),node("p","muted",module.description),modeBar(route));
+      if(!module.lessons.length){modulePage.append(node("div","learning-notice","Lecciones en preparación. Puedes explorar este módulo, pero todavía no tiene actividades ni cuenta como progreso."));return;}
+      module.lessons.forEach(lesson=>{
+        const key=`${route.id}/${module.id}/${lesson.id}`,id=lessonScreenId(key),card=node("section","card"),open=button("Abrir lección");
+        card.append(node("p","learning-provisional",lesson.status==="published" ? "Lección publicada" : "Demostración interactiva · Provisional"),node("h4","learning-dashboard-title",lesson.title),node("p","muted",lesson.duration),open);modulePage.append(card);
+        const lessonPage=makeScreen(id,lesson.title,()=>showScreen(moduleId));lessonPage.append(modeBar(route),lessonView(lesson,route.id,module.id));
+        open.addEventListener("click",()=>showScreen(id));
+      });
+    });
+  });
+  // Áreas futuras: solo metadatos de navegación, sin cursos ni recursos inventados.
+  // Las futuras portadas multimedia podrán asociarse al id de área/ruta.
+  [{id:"desarrollo-personal",title:"Desarrollo personal"},{id:"inteligencia-artificial",title:"Inteligencia artificial"},{id:"programacion",title:"Programación"}].forEach(area=>{
+    const card=node("section","card learning-planned-area");card.dataset.areaId=area.id;
+    card.append(node("h4","learning-dashboard-title",area.title),node("p","learning-input-hint","Área prevista · Todavía sin rutas disponibles"));explore.append(card);
+  });
+  updateModes();
   refreshProgress();
+  showScreen("learning-home",false);
   window.addEventListener("storage",event => {
+    if(event.key===preferences.key || event.key===null) {
+      try {chosenModes={...preferences.read().routes};updateModes();}
+      catch(error){preferenceError(error);}
+    }
     if (event.key !== store.key && event.key !== null) return;
     const latest = read();
     if (!latest) return;

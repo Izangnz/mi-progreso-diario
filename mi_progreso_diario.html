@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="./aprendizaje.css">
   <script src="./aprendizaje-contenido.js" defer></script>
   <script src="./aprendizaje-storage.js" defer></script>
+  <script src="./aprendizaje-progreso.js" defer></script>
+  <script src="./aprendizaje-preferencias.js" defer></script>
   <script src="./aprendizaje.js" defer></script>
   <style>
     :root {font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark; background:#0b1220;color:#edf2ff}
@@ -191,7 +193,7 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   <h1>Mi progreso diario 🚀</h1>
   <p class="sub" id="dateLabel"></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <p class="version-label">Mi Progreso Diario · v0.8</p>
+    <p class="version-label">Mi Progreso Diario · v0.9</p>
     <h2 id="inicioTitle" class="view-title">Inicio</h2>
   <section class="card">
     <div class="head"><h2>Progreso de hoy</h2><span class="muted" id="percentage">0 %</span></div>
@@ -243,8 +245,6 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   </section>
   <section id="aprendizaje" class="app-view" aria-labelledby="aprendizajeTitle" hidden>
     <h2 id="aprendizajeTitle" class="view-title">Aprendizaje</h2>
-    <p class="learning-intro">Aprende una idea. Pruébala en tu realidad. Construye paso a paso.</p>
-    <div class="learning-notice"><strong>Laboratorio de aprendizaje · Contenido provisional</strong><br>Prueba una demostración con ejercicios y autoevaluación. El contenido educativo está pendiente de revisión; completar la demostración no equivale a completar la ruta.</div>
     <div id="learningRoutes"></div>
     <noscript><p class="muted">Activa JavaScript para explorar las rutas de aprendizaje.</p></noscript>
   </section>

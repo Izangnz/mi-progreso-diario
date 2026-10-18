@@ -67,6 +67,7 @@
       // Solo espera el mismo bloqueo que usa la aplicación; no modifica el almacenamiento.
       await navigator.locks.request("mi-panel-habitos-v1", () => {});
       await navigator.locks.request("mi-progreso-aprendizaje-v1", () => {});
+      await navigator.locks.request("mi-aprendizaje-modalidades-v1", () => {});
       if (document.getElementById("savedStatus").textContent.startsWith("Aviso:")) {
         throw new Error("Hay un aviso de guardado. Resuélvelo antes de actualizar.");
       }
