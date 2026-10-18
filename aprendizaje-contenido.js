@@ -56,8 +56,36 @@
     ]
   }];
 
+  // Presentación opcional: los bloques y registros anteriores siguen siendo la fuente educativa.
+  demo.journey = {
+    id:"problema-recorrido",
+    visuals:{
+      intro:[{symbol:"○",title:"Persona",text:"¿A quién quieres ayudar?"},{symbol:"!",title:"Dificultad",text:"¿Qué le cuesta conseguir?"},{symbol:"?",title:"Investiga",text:"Escucha antes de vender."}],
+      story:[{symbol:"▤",title:"Muchos libros",text:"Un estudiante va a clase."},{art:"learning-backpack",title:"Asa rota",text:"La mochila no aguanta."},{symbol:"?",title:"Una pista",text:"¿Qué pasó? ¿Cómo lo resolvió?"}],
+      challenge:[{symbol:"○",title:"Persona",text:"Un grupo concreto."},{symbol:"▤",title:"Situación",text:"Qué intenta hacer."},{symbol:"!",title:"Dificultad",text:"Qué se lo impide."}],
+      finish:[{symbol:"✓",title:"Observar",text:"Detectar una dificultad."},{symbol:"?",title:"Investigar",text:"Escuchar experiencias."},{symbol:"→",title:"Comprender",text:"Separar hechos de dudas."}]
+    },
+    decision:{question:"Antes de empezar un negocio, ¿qué harías?",options:[
+      "Comprar productos y pensar después a quién venderlos.",
+      "Escuchar a personas y descubrir una dificultad concreta.",
+      "Elegir un nombre y dar por hecho que habrá clientes."
+    ],correct:1,explanations:[
+      "Comprar primero supone un gasto antes de conocer la necesidad. Empieza escuchando.",
+      "Escuchar te ayuda a conocer qué cuesta resolver antes de elegir una solución.",
+      "Un nombre no demuestra una necesidad. Primero investiga qué les ocurre a tus posibles clientes."
+    ]},
+    story:{question:"A un estudiante se le rompe el asa de la mochila al llevar libros. ¿Cómo investigarías?",options:[
+      "Preguntaría: «¿Verdad que comprarías mi mochila?».",
+      "Concluiría que todos los estudiantes necesitan una nueva.",
+      "Preguntaría qué ocurrió, cómo lo resolvió y si le había pasado antes."
+    ],correct:2,explanations:[
+      "Esa pregunta sugiere la respuesta y propone vender antes de comprender. Prueba una pregunta abierta.",
+      "Un caso es una pista, no una conclusión sobre todo el mundo. Escucha más experiencias.",
+      "Estas preguntas abiertas permiten conocer hechos y alternativas, sin empujar a comprar."
+    ]}
+  };
   demo.status = "demo";
-  demo.format = "text";
+  demo.format = "blocks";
   demo.practice.exercises = [
     {id:"persona",prompt:"¿A quién quieres ayudar?",hint:"Elige un grupo concreto de personas o pequeños negocios al que puedas escuchar.",example:"Estudiantes que llevan varios libros al centro de estudios.",criteria:"Un grupo reconocible, no «todo el mundo». Todavía no necesitas decidir qué vas a vender."},
     {id:"problema",prompt:"¿Qué le cuesta conseguir a esa persona?",hint:"Describe una dificultad, cuándo ocurre y qué has observado. Si es una suposición, indícalo.",example:"Una estudiante contó que se rompió el asa de su mochila al llevar varios libros. Me falta comprobar si les ocurre a más compañeros.",criteria:"Una dificultad concreta del cliente. Separa lo observado de lo que crees y evita presentar tu producto como si fuera el problema."},
@@ -70,5 +98,86 @@
     {id:"evidencia",question:"Quieres entender cómo estudia alguien antes de ofrecer clases. ¿Qué pregunta ayuda más?",options:["¿Verdad que necesitas mis clases?","¿Te gustaría un servicio perfecto?","¿Cómo preparaste el último examen y qué te costó más?"],correct:2,explanations:["Sugiere la respuesta y ofrece una solución antes de escuchar.","Habla de una situación imaginaria, no de lo que la persona hace hoy.","Es abierta y pregunta por una experiencia real. Puede mostrar qué hace ahora y dónde necesita ayuda."]},
     {id:"hipotesis",question:"Enseñas un dibujo de etiquetas para botellas. ¿Qué aporta más información que un «me gusta»?",options:["Que alguien acuerde probar una muestra en una fecha concreta.","Que tú estés muy convencido de tu idea.","Que compres muchas etiquetas antes de hablar con nadie."],correct:0,explanations:["Es una acción concreta para tu prueba pequeña. Aporta una señal de interés, aunque aún no garantiza una compra.","Tu entusiasmo no indica si otra persona necesita la solución.","Gastar más no demuestra interés del cliente. Primero escucha y prueba con poco."]}
   ];
+  // Piloto local: sin archivos multimedia. El texto alternativo enseña el mismo concepto.
+  // Los ids de los bloques son editoriales; nunca sustituyen los ids de respuestas.
+  const stepIds = ["cliente-problema","alternativas-actuales","solucion-prueba"];
+  demo.completion = {type:"manual",description:"Finalización personal después de revisar y practicar. Reproducir medios no completa la lección."};
+  demo.contentSteps = demo.explanation.map((part,index) => {
+    const id = stepIds[index];
+    const teaching = index < 2 ? {
+      id:id+"-concepto",type:index===0 ? "video" : "audio",phase:"teach",
+      title:index===0 ? "Conoce a la persona y su problema" : "Escucha cómo lo resuelve hoy",
+      src:null,poster:null,captions:[],transcript:part.paragraphs,
+      fallback:{paragraphs:part.paragraphs}
+    } : {id:id+"-concepto",type:"explanation",paragraphs:part.paragraphs};
+    const blocks = [teaching];
+    if(index===0)blocks.push({
+      id:"cliente-problema-esquema",type:"image",phase:"show",src:null,
+      title:"Separa la persona, la dificultad y lo que falta comprobar",
+      alt:"Una estudiante transporta libros, el asa se rompe y todavía falta preguntar si les ocurre a otros.",
+      caption:"Esquema didáctico en HTML. No hay un archivo de imagen asociado.",
+      fallback:{paragraphs:["Describe primero a quién le ocurre y qué le cuesta. Después comprueba tus dudas."],
+        visual:[{label:"Persona",text:"Estudiante que lleva libros"},{label:"Dificultad",text:"El asa de la mochila se rompe"},{label:"Por comprobar",text:"¿Le ocurre también a otras personas?"}]}
+    });
+    blocks.push({id:id+"-ejemplo",type:"example",text:part.example});
+    part.exercises.forEach(exerciseId => blocks.push({id:"ejercicio-"+exerciseId,type:"exercise",exerciseId}));
+    part.questions.forEach(questionId => blocks.push({id:"pregunta-"+questionId,type:"question",questionId}));
+    return {id,title:part.title,blocks};
+  });
+
+  // Adaptación de contenido puro: no presenta elementos ni accede al almacenamiento.
+  // contentSteps es el nuevo formato; explanation sigue siendo compatible.
+  const phases = {teach:0,show:1,practice:2,check:3};
+  const defaultPhase = {video:"teach",audio:"teach",image:"show",explanation:"teach",example:"show",exercise:"practice",question:"check"};
+  function identifier(value) { return typeof value === "string" && /^[a-z0-9-]+$/.test(value); }
+  function normalize(lesson) {
+    const exerciseRegistry = lesson.practice?.exercises || [];
+    const questionRegistry = lesson.quiz || [];
+    const legacy = !Array.isArray(lesson.contentSteps);
+    const steps = legacy ? (lesson.explanation || []).map((part,index) => {
+      const id = part.id || "paso-"+(part.exercises?.[0] || part.questions?.[0] || index+1);
+      return {id,title:part.title,blocks:[
+        {id:id+"-concepto",type:"explanation",paragraphs:part.paragraphs || []},
+        {id:id+"-ejemplo",type:"example",text:part.example || ""},
+        ...(part.exercises || []).map(exerciseId => ({id:"ejercicio-"+exerciseId,type:"exercise",exerciseId})),
+        ...(part.questions || []).map(questionId => ({id:"pregunta-"+questionId,type:"question",questionId}))
+      ]};
+    }) : lesson.contentSteps;
+    if(!steps.length)throw new Error("La lección todavía no tiene pasos educativos.");
+    const blockIds = new Set(),stepIdSet = new Set(),exerciseIds = new Set(),questionIds = new Set();
+    const normalizedSteps = steps.map(part => {
+      if(!identifier(part.id) || stepIdSet.has(part.id) || !Array.isArray(part.blocks) || !part.blocks.length)throw new Error("Revisa los identificadores y bloques del paso.");
+      stepIdSet.add(part.id);
+      let previous=-1,taught=false,shown=false;
+      const blocks=part.blocks.map(block => {
+        if(!identifier(block.id) || blockIds.has(block.id) || !Object.hasOwn(defaultPhase,block.type))throw new Error("Bloque desconocido o identificador duplicado.");
+        blockIds.add(block.id);
+        const phase=block.phase || defaultPhase[block.type];
+        if(!Object.hasOwn(phases,phase) || phases[phase]<previous ||
+          (["exercise","question"].includes(block.type) && phase!==defaultPhase[block.type]))throw new Error("Los bloques deben respetar enseñar, mostrar, practicar y comprobar.");
+        previous=phases[phase];if(phase==="teach")taught=true;if(phase==="show")shown=true;
+        const hasText=value=>typeof value==="string" ? !!value.trim() : Array.isArray(value) && value.some(text=>typeof text==="string"&&text.trim());
+        if(["video","audio"].includes(block.type) && !hasText(block.transcript) && !hasText(block.fallback?.paragraphs))throw new Error("Añade una transcripción o alternativa escrita al recurso audiovisual.");
+        if(block.type==="explanation" && !hasText(block.paragraphs))throw new Error("La explicación está vacía.");
+        if(block.type==="example" && !hasText(block.text))throw new Error("Falta el ejemplo del concepto.");
+        if(["exercise","question"].includes(block.type) && (!taught || !shown))throw new Error("Explica el concepto y muestra un ejemplo antes de proponer la actividad.");
+        if(block.type==="exercise") {
+          if(!identifier(block.exerciseId) || exerciseIds.has(block.exerciseId) || !exerciseRegistry.some(item=>item.id===block.exerciseId))throw new Error("Referencia de ejercicio no válida o repetida.");
+          exerciseIds.add(block.exerciseId);
+        }
+        if(block.type==="question") {
+          if(!identifier(block.questionId) || questionIds.has(block.questionId) || !questionRegistry.some(item=>item.id===block.questionId))throw new Error("Referencia de pregunta no válida o repetida.");
+          questionIds.add(block.questionId);
+        }
+        return {...block,phase};
+      });
+      return {...part,blocks};
+    });
+    const completion = lesson.completion || (legacy ? {type:"manual"} : {type:"undefined"});
+    return {steps:normalizedSteps,exercises:[...exerciseIds].map(id=>exerciseRegistry.find(item=>item.id===id)),
+      questions:[...questionIds].map(id=>questionRegistry.find(item=>item.id===id)),completion,
+      summary:lesson.summary || [],intro:lesson.practice?.intro || "Revisa cada concepto antes de realizar sus actividades.",outcome:lesson.practice?.outcome || ""};
+  }
+  window.MPDLearningBlocks = Object.freeze({normalize});
   window.MPDLearningCatalog = routes;
 })();

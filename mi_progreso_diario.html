@@ -16,6 +16,9 @@
   <script src="./aprendizaje-storage.js" defer></script>
   <script src="./aprendizaje-progreso.js" defer></script>
   <script src="./aprendizaje-preferencias.js" defer></script>
+  <script src="./misiones-contenido.js" defer></script>
+  <script src="./misiones-storage.js" defer></script>
+  <script src="./misiones.js" defer></script>
   <script src="./aprendizaje.js" defer></script>
   <style>
     :root {font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark; background:#0b1220;color:#edf2ff}
@@ -180,6 +183,47 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   .card { padding: 18px; }
 }
 
+
+/* Fase 2: resumen y navegación; sin rediseñar Hábitos. */
+body { padding-top:calc(16px + env(safe-area-inset-top,0px)); padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+.app-header h1 { font-size:18px; margin:0 0 12px; color:#DCC08B; }
+.global-save-status { margin:0 0 14px; padding:10px 12px; border:1px solid #514A3D; border-radius:10px; color:#D9D2C5; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.dashboard-greeting { font-size:clamp(24px,5vw,32px); font-weight:750; margin:8px 0; }
+.dashboard-grid { display:grid; gap:16px; }
+.dashboard-grid > .card { margin:0; min-width:0; padding:20px; }
+.dashboard-grid button { min-height:44px; }
+.dashboard-pending { padding-left:20px; line-height:1.8; overflow-wrap:anywhere; }
+.dashboard-goal { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
+.secondary-action { background:#303136; color:#E9D19A; border:1px solid #514A3D; }
+.goal-editor { margin-top:16px; }
+.goal-editor summary { cursor:pointer; padding:12px 0; color:#DCC08B; }
+.goal-editor label { display:block; margin:12px 0; }
+.bottom-nav { padding-left:max(8px,env(safe-area-inset-left,0px)); padding-right:max(8px,env(safe-area-inset-right,0px)); }
+.view-title:focus { outline:none; }
+@media(min-width:760px) { main { max-width:960px; } .app-view:not(#inicio) { max-width:700px; margin-inline:auto; } .dashboard-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(prefers-reduced-motion:reduce) { .fill { transition:none; } }
+
+/* Fase 3: controles persistentes y estados claros, en el orden guardado. */
+#habitsList { display:grid; gap:10px; }
+#habitsList .habit { padding:10px 12px; border:1px solid #514A3D; border-radius:14px; background:#17191D; gap:10px; }
+#habitsList .habit.done { background:#242119; border-color:#AA854E; }
+#habitsList .habit label { min-height:48px; }
+#habitsList .habit input { width:30px; height:30px; margin:7px; }
+.habit-copy { display:flex; flex-direction:column; gap:4px; min-width:0; }
+#habitsList .habit-name { font-size:15px; line-height:1.45; color:#F5F1E8; }
+#habitsList .done .habit-name { text-decoration:none; color:#D9D2C5; }
+.habit-state { color:#DCC08B; font-size:12px; line-height:1.4; }
+#habitsList .delete { min-width:64px; min-height:44px; padding:8px; font-size:12px; background:transparent; border:1px solid #514A3D; color:#C9C2B6; }
+#habitsList [aria-busy="true"] .habit-state { color:#D9D2C5; }
+.habit-feedback { min-height:22px; color:#DCC08B; font-size:13px; line-height:1.6; }
+#habitForm { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; padding-top:12px; border-top:1px solid #36332C; }
+.habit-add-label { grid-column:1 / -1; font-size:14px; color:#D9D2C5; }
+#habitForm input,#habitForm button { min-height:48px; }
+.habits-summary .big { font-size:26px; }
+.habit-just-completed { animation:habit-confirm .3s ease-out; }
+@keyframes habit-confirm { from { box-shadow:0 0 0 2px #DCC08B; } to { box-shadow:0 0 0 0 transparent; } }
+@media(prefers-reduced-motion:reduce) { .habit-just-completed { animation:none; } }
+@media(max-width:380px) { #habitForm { grid-template-columns:minmax(0,1fr); } #habitsList .habit { padding:8px; gap:6px; } #habitsList .habit input { margin:7px 3px; } }
 </style>
 </head>
 <body>
@@ -188,29 +232,58 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
     <p id="pwaUpdateMessage" role="status">Nueva versión disponible. Puedes actualizar cuando termines.</p>
     <button type="button" id="pwaUpdateButton">Actualizar</button>
   </aside>
-  <div class="eyebrow">Mi laboratorio SaaS 🚀</div>
-  <!-- PARA PRACTICAR: cambia solo el texto que aparece entre <h1> y </h1>. -->
-  <h1>Mi progreso diario 🚀</h1>
-  <p class="sub" id="dateLabel"></p>
+  <header class="app-header"><h1>Mi Progreso Diario</h1></header>
+  <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
+  <p class="global-save-status" id="learningGlobalStatus" role="status" hidden></p>
+  <p class="global-save-status" id="missionGlobalStatus" role="status" hidden></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <p class="version-label">Mi Progreso Diario · v0.9</p>
-    <h2 id="inicioTitle" class="view-title">Inicio</h2>
+    <p class="version-label">Mi Progreso Diario · v0.10</p>
+    <h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2>
+    <p id="greeting" class="dashboard-greeting"></p>
+    <p class="sub" id="dateLabel"></p>
+    <div class="dashboard-grid">
   <section class="card">
-    <div class="head"><h2>Progreso de hoy</h2><span class="muted" id="percentage">0 %</span></div>
-    <div class="big" id="progressLabel">0 de 0 hábitos</div>
-    <div class="track" role="progressbar" aria-label="Progreso de hábitos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress"><div class="fill" id="progressBar"></div></div>
+    <div class="head"><h2>Progreso de hoy</h2><span class="muted" id="percentage">—</span></div>
+    <div class="big" id="progressLabel">Comprobando progreso…</div>
+    <div class="track" role="progressbar" aria-label="Progreso de hábitos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress" hidden><div class="fill" id="progressBar"></div></div>
   </section>
-  <section class="card">
-    <h2><label for="weeklyGoal">🎯 Mi objetivo de esta semana</label></h2>
+  <section class="card" aria-labelledby="pendingTitle">
+    <div class="head"><h2 id="pendingTitle">Pendientes de hoy</h2><button type="button" id="viewAllHabits" class="secondary-action">Ver todos</button></div>
+    <ul id="pendingHabits" class="dashboard-pending"></ul>
+    <p id="pendingStatus" class="muted"></p>
+  </section>
+  <section class="card" aria-labelledby="goalTitle">
+    <h2 id="goalTitle">Tu objetivo semanal</h2>
+    <p id="goalPreview" class="dashboard-goal"></p>
+    <button type="button" id="editGoal" class="secondary-action">Ver o editar objetivo</button>
+    <details id="goalEditor" class="goal-editor"><summary>Editor del objetivo semanal</summary>
+    <label for="weeklyGoal">Mi objetivo de esta semana</label>
     <textarea id="weeklyGoal" maxlength="1000" placeholder="Ej.: Construir mi primera aplicación y comprender cómo funciona."></textarea>
-    <p class="muted" id="savedStatus" aria-live="polite">Se guarda automáticamente en este navegador.</p>
+    </details>
   </section>
+  <section class="card" aria-labelledby="dashboardLearningTitle">
+    <h2 id="dashboardLearningTitle">Continuar aprendiendo</h2>
+    <p id="dashboardLearningText" class="muted">Preparando tu siguiente paso…</p>
+    <button type="button" id="dashboardLearningButton" disabled>Continuar aprendiendo</button>
+    <div class="mission-entry"><p class="muted">Llévalo a la vida real · Práctica opcional</p><button type="button" id="dashboardMissionButton" class="secondary-action">Probar Detective de problemas</button></div>
+  </section>
+  <section id="recentActivity" class="card" aria-labelledby="recentTitle" hidden>
+    <h2 id="recentTitle">Actividad reciente</h2><p id="recentSummary" class="muted"></p>
+  </section>
+  </div>
   </section>
   <section id="habitos" class="app-view" aria-labelledby="habitosTitle" hidden>
     <h2 id="habitosTitle" class="view-title">Hábitos</h2>
+    <section class="card habits-summary" aria-labelledby="habitsSummaryTitle">
+      <div class="head"><h2 id="habitsSummaryTitle">Tu progreso de hoy</h2><span id="habitsPercentage" class="muted">—</span></div>
+      <p id="habitsProgressLabel" class="big">Comprobando progreso…</p>
+      <div id="habitsProgress" class="track" role="progressbar" aria-label="Progreso diario de hábitos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="habitsProgressBar" class="fill"></div></div>
+      <p id="habitsSummaryStatus" class="muted"></p>
+    </section>
   <section class="card">
     <h2>Mis hábitos diarios</h2>
-    <div id="habitsList"></div>
+    <div id="habitsList" aria-label="Hábitos en su orden habitual"></div>
+    <p id="habitFeedback" class="habit-feedback" role="status" aria-atomic="true"></p>
     
 <div id="felicitacion" role="status" hidden>
   🏆 ¡Objetivos del día completados!
@@ -219,6 +292,7 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
 </div>
 
     <form id="habitForm">
+      <label for="newHabit" class="habit-add-label">Añadir un hábito diario</label>
       <input id="newHabit" type="text" maxlength="65" placeholder="Ej.: Aprender programación 20 min" aria-label="Nuevo hábito" required>
       <button type="submit">+ Añadir</button>
     </form>
@@ -282,6 +356,8 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
       else button.removeAttribute("aria-current");
     });
     refresh();
+    const heading=document.getElementById(viewId+"Title");
+    if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
     window.scrollTo(0, 0);
   }
   navButtons.forEach(button => {
@@ -310,6 +386,8 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
     return saved;
   }
   let state = initialState();
+  let dashboardReliable=false;
+  let goalDraftPending=false;
   function dailyRecord(habits) {
     // Copias independientes: eliminar o marcar hábitos mañana no modifica ayer.
     const copy = habits.map(h => ({...h}));
@@ -356,10 +434,12 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
         }
         state = next;
       });
-      document.getElementById("savedStatus").textContent = "Se guarda automáticamente en este navegador.";
+      dashboardReliable=true;
+      document.getElementById("savedStatus").textContent = goalDraftPending ? "Aviso: el objetivo tiene cambios pendientes de confirmar. Su borrador se conserva." : "Datos guardados en este navegador.";
       render();
       return true;
     } catch (error) {
+      dashboardReliable=false;
       document.getElementById("savedStatus").textContent = "Aviso: no se han guardado cambios. " + error.message;
       console.warn("No se pudo guardar el historial:", error);
       render();
@@ -435,31 +515,78 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   document.getElementById("previousWeek").addEventListener("click",()=>{weekOffset--;renderWeek();});
   document.getElementById("nextWeek").addEventListener("click",()=>{if(weekOffset<0)weekOffset++;renderWeek();});
   document.getElementById("currentWeek").addEventListener("click",()=>{weekOffset=0;selectedDay=localDate();renderWeek();});
+  // Tarjetas persistentes: actualizar un estado no sustituye los controles enfocados.
+  const habitCards=new Map(),habitOperations=new Map(),habitDesired=new Map();
+  let emptyHabitMessage;
+  const habitKey=id=>typeof id+":"+String(id);
+  async function habitAction(id,change,completed=null){
+    const key=habitKey(id);
+    habitOperations.set(key,(habitOperations.get(key)||0)+1);
+    if(completed!==null)habitDesired.set(key,completed);
+    const card=habitCards.get(key);if(card)card.row.classList.remove("habit-just-completed");
+    document.getElementById("habitFeedback").textContent="Guardando cambio…";
+    renderHabitCards();
+    const saved=await updateState(change);
+    const remaining=habitOperations.get(key)-1;
+    if(remaining)habitOperations.set(key,remaining);else{habitOperations.delete(key);habitDesired.delete(key);}
+    renderHabitCards();
+    const current=state.habits.find(h=>h.id===id);
+    if(saved){
+      document.getElementById("habitFeedback").textContent=current ? current.done ? "Hábito completado y guardado." : "Hábito pendiente. Cambio guardado." : "Hábito eliminado. Cambio guardado.";
+      if(!habitOperations.has(key) && completed && current?.done && card)card.row.classList.add("habit-just-completed");
+    }else document.getElementById("habitFeedback").textContent="No se ha guardado el cambio. Se mantiene el último estado confirmado. Revisa el aviso superior.";
+  }
+  function renderHabitCards(){
+    const list=document.getElementById("habitsList"),focused=document.activeElement;
+    const ordered=[...habitCards.values()];
+    const removedFocus=ordered.find(card=>card.row.contains(focused) && !state.habits.some(h=>habitKey(h.id)===card.key));
+    const removedIndex=removedFocus ? ordered.indexOf(removedFocus) : -1;
+    for(const [key,card] of habitCards){
+      if(!state.habits.some(h=>habitKey(h.id)===key)){card.row.remove();habitCards.delete(key);}
+    }
+    if(!emptyHabitMessage){emptyHabitMessage=document.createElement("p");emptyHabitMessage.className="empty";emptyHabitMessage.textContent="Aún no tienes hábitos. Añade el primero para empezar a registrar tu día.";}
+    if(!state.habits.length){if(emptyHabitMessage.parentElement!==list)list.append(emptyHabitMessage);}
+    else emptyHabitMessage.remove();
+    state.habits.forEach((habit,index)=>{
+      const key=habitKey(habit.id);let card=habitCards.get(key);
+      if(!card){
+        const row=document.createElement("div");row.className="habit";
+        const label=document.createElement("label"),check=document.createElement("input");check.type="checkbox";
+        const copy=document.createElement("span");copy.className="habit-copy";
+        const name=document.createElement("span");name.className="habit-name";
+        const status=document.createElement("span");status.className="habit-state";
+        copy.append(name,status);label.append(check,copy);
+        const del=document.createElement("button");del.type="button";del.className="delete";del.textContent="Eliminar";
+        check.addEventListener("change",()=>{const value=check.checked;return habitAction(habit.id,next=>{const current=next.habits.find(h=>h.id===habit.id);if(current)current.done=value;},value);});
+        del.addEventListener("click",()=>habitAction(habit.id,next=>{next.habits=next.habits.filter(h=>h.id!==habit.id);}));
+        row.append(label,del);card={key,row,check,name,status,del};habitCards.set(key,card);
+      }
+      card.name.textContent=habit.name;card.check.checked=habitDesired.has(key) ? habitDesired.get(key) : habit.done;
+      card.check.setAttribute("aria-label",habit.name);card.del.setAttribute("aria-label",`Eliminar ${habit.name}`);
+      const busy=habitOperations.has(key);
+      card.row.classList.toggle("done",habit.done);card.row.setAttribute("aria-busy",String(busy));
+      card.status.textContent=busy ? "Guardando…" : habit.done ? "Completado" : "Pendiente";
+      // Mantener controles activos conserva el foco; el bloqueo existente serializa los cambios.
+      if(list.children[index]!==card.row)list.insertBefore(card.row,list.children[index] || null);
+    });
+    if(removedFocus && !document.getElementById("habitos").hidden){
+      const next=state.habits[Math.min(removedIndex,state.habits.length-1)];
+      (next ? habitCards.get(habitKey(next.id)).check : document.getElementById("newHabit")).focus({preventScroll:true});
+    }
+    const total=state.habits.length,count=state.habits.filter(h=>h.done).length;
+    const percent=total ? Math.round(count/total*100) : null;
+    document.getElementById("habitsProgressLabel").textContent=!dashboardReliable ? "Progreso no disponible" : total ? `${count} de ${total} hábitos` : "Todavía no tienes hábitos";
+    document.getElementById("habitsPercentage").textContent=dashboardReliable && total ? `${percent} %` : "—";
+    document.getElementById("habitsProgress").hidden=!dashboardReliable || !total;
+    document.getElementById("habitsProgress").setAttribute("aria-valuenow",percent ?? 0);
+    document.getElementById("habitsProgressBar").style.width=`${percent ?? 0}%`;
+    document.getElementById("habitsSummaryStatus").textContent=!dashboardReliable ? "Revisa el aviso de guardado antes de continuar." : !total ? "Añade tu primer hábito. Aún no hay un porcentaje que valorar." : count===total ? "Todos los hábitos de hoy están completados." : `${total-count} pendientes · Se conserva tu orden habitual.`;
+  }
   function render(){
     const goalField = document.getElementById("weeklyGoal");
-    if (document.activeElement !== goalField) goalField.value = state.weeklyGoal || "";
+    if (!goalDraftPending && document.activeElement !== goalField) goalField.value = state.weeklyGoal || "";
     document.getElementById("dateLabel").textContent=new Intl.DateTimeFormat("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date());
-    const list=document.getElementById("habitsList"); list.replaceChildren();
-    if(!state.habits.length){const empty=document.createElement("p");empty.className="empty";empty.textContent="Aún no tienes hábitos. Añade el primero.";list.append(empty);}
-    for(const habit of state.habits){
-      const row=document.createElement("div"); row.className="habit"+(habit.done?" done":"");
-      const label=document.createElement("label");
-      const check=document.createElement("input");check.type="checkbox";check.checked=habit.done;
-check.addEventListener("change", () => {
-  const checked = check.checked;
-  updateState(next => {
-    const current = next.habits.find(h => h.id === habit.id);
-    if (current) current.done = checked;
-  });
-});
-      const text=document.createElement("span");text.className="habit-name";text.textContent=habit.name;
-      label.append(check,text);
-      const del=document.createElement("button");del.type="button";del.className="delete";del.textContent="Eliminar";del.setAttribute("aria-label",`Eliminar ${habit.name}`);
-      del.addEventListener("click",()=>updateState(next => {
-        next.habits = next.habits.filter(h => h.id !== habit.id);
-      }));
-      row.append(label,del);list.append(row);
-    }
+    renderHabitCards();
     const count=state.habits.filter(h=>h.done).length, total=state.habits.length;
 
 const felicitacion = document.getElementById("felicitacion");
@@ -475,6 +602,7 @@ felicitacion.hidden = !(
     document.getElementById("progressBar").style.width=`${percentage}%`;
     document.getElementById("progress").setAttribute("aria-valuenow",percentage);
     renderWeek();
+    renderDashboard();
   }
   document.getElementById("habitForm").addEventListener("submit",async event=>{
     event.preventDefault();const input=document.getElementById("newHabit");const name=input.value.trim();if(!name)return;
@@ -484,9 +612,54 @@ felicitacion.hidden = !(
     if (saved && input.value.trim() === name) input.value="";
   });
   const goal=document.getElementById("weeklyGoal");
-  goal.addEventListener("input",()=>{
-    const text = goal.value;
-    updateState(next => { next.weeklyGoal = text; });
+  goal.addEventListener("input",async()=>{
+    const text = goal.value;goalDraftPending=true;
+    const saved=await updateState(next => { next.weeklyGoal = text; });
+    if(saved && goal.value===text){goalDraftPending=false;document.getElementById("savedStatus").textContent="Objetivo guardado en este navegador.";}
+  });
+  // Resúmenes de solo lectura. No crean métricas ni registros nuevos.
+  function renderDashboard(){
+    const hour=new Date().getHours();
+    document.getElementById("greeting").textContent=hour<12 ? "Buenos días" : hour<20 ? "Buenas tardes" : "Buenas noches";
+    const pending=document.getElementById("pendingHabits");pending.replaceChildren();
+    const progress=document.getElementById("progress");
+    progress.hidden=!dashboardReliable || !state.habits.length;
+    document.getElementById("recentActivity").hidden=true;
+    if(!dashboardReliable){
+      document.getElementById("progressLabel").textContent="Progreso no disponible";
+      document.getElementById("percentage").textContent="—";
+      document.getElementById("pendingStatus").textContent="No podemos confirmar tus pendientes. Revisa el aviso de guardado.";
+      document.getElementById("goalPreview").textContent="Objetivo no disponible. El editor conserva los cambios pendientes.";
+      return;
+    }
+    if(!state.habits.length){
+      document.getElementById("progressLabel").textContent="Todavía no tienes hábitos";
+      document.getElementById("percentage").textContent="—";
+    }
+    const remaining=state.habits.filter(h=>!h.done);
+    remaining.slice(0,3).forEach(h=>{const item=document.createElement("li");item.textContent=h.name;pending.append(item);});
+    document.getElementById("pendingStatus").textContent=!state.habits.length ? "Añade tu primer hábito en Hábitos." : !remaining.length ? "Has completado todos los hábitos de hoy." : remaining.length>3 ? `Hay ${remaining.length} pendientes; aquí ves los tres primeros.` : `${remaining.length} hábitos pendientes.`;
+    document.getElementById("goalPreview").textContent=state.weeklyGoal.trim() || "Todavía no has escrito un objetivo.";
+    const dates=weekDatesForRecent();
+    const records=dates.map(day=>dayStats(day)).filter(d=>["recorded","zero"].includes(d.kind));
+    if(records.length>=2){
+      document.getElementById("recentActivity").hidden=false;
+      document.getElementById("recentSummary").textContent=`En los últimos 7 días completos, completaste al menos un hábito en ${records.filter(d=>d.completed>0).length} de ${records.length} días con registro y hábitos. Los días sin registro o sin hábitos no se incluyen.`;
+    }
+  }
+  function weekDatesForRecent(){
+    const today=new Date();today.setHours(12,0,0,0);
+    return Array.from({length:7},(_,i)=>{const d=new Date(today);d.setDate(d.getDate()-i-1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;});
+  }
+  document.getElementById("viewAllHabits").addEventListener("click",()=>showView("habitos"));
+  document.getElementById("editGoal").addEventListener("click",()=>{document.getElementById("goalEditor").open=true;goal.focus();});
+  document.getElementById("dashboardMissionButton").addEventListener("click",()=>{
+    if(!window.MPDMission){document.getElementById("missionGlobalStatus").hidden=false;document.getElementById("missionGlobalStatus").textContent="La misión no está disponible. Abre la versión local con el servidor activo.";return;}
+    showView("aprendizaje");window.MPDMission.open(()=>showView("inicio"));
+  });
+  document.getElementById("dashboardLearningButton").addEventListener("click",()=>{
+    if(!window.MPDLearning?.continueRecommended)return;
+    showView("aprendizaje");window.MPDLearning.continueRecommended();
   });
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh();});
   window.addEventListener("storage",event=>{

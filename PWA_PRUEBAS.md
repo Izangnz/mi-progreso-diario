@@ -1,66 +1,75 @@
-# Mi Progreso Diario · PWA 0.5.0
+# Mi Progreso Diario · PWA v0.10
 
-No necesita instalar paquetes ni crear cuentas de usuario. No se ha publicado.
+Versión visible: **v0.10**. Caché: **0.10.0**.
 
-## Probar en el Mac sin publicar
+Incluye el dashboard de Inicio, navegación, tarjetas de hábitos, aprendizaje visual
+interactivo, arquitectura audiovisual y el piloto Detective de problemas.
+No requiere cuentas, paquetes de terceros ni servicios de pago.
 
-1. Guarda una copia de seguridad reciente. Las pruebas deben usar hábitos ficticios.
-2. Abre Terminal en la carpeta del proyecto. Si tienes Python 3, ejecuta:
+## Actualizar la PWA instalada sin perder datos
 
-   ```sh
-   python3 -m http.server 8000 --bind 127.0.0.1
-   ```
+1. Con conexión a Internet, abre la aplicación desde su icono habitual en el iPhone.
+2. Guarda respuestas educativas, el objetivo y cualquier borrador de la misión.
+3. Mantén una sola ventana de esta aplicación; cierra otras pestañas abiertas con la misma app.
+4. Espera el aviso «Nueva versión disponible». Si no aparece, cambia a otra aplicación
+   y vuelve a Mi Progreso Diario: se comprueba al recuperar visibilidad y conexión.
+5. Pulsa Actualizar. Se espera el fin de los guardados y se recarga al activar la versión.
+6. Confirma «Mi Progreso Diario · v0.10» en Inicio. Comprueba hábitos, objetivo,
+   estadísticas, respuestas y progreso; la misión no modifica las respuestas anteriores.
+7. Si no aparece el aviso, cierra la app y vuelve a abrirla con conexión. Si sigue
+   sin aparecer, revisa que GitHub Pages haya terminado de publicar. No borres datos
+   ni desinstales la PWA para forzar una actualización.
 
-3. Abre `http://localhost:8000/` en Safari, preferiblemente en un perfil de pruebas.
-   Esta dirección tiene almacenamiento propio: no mostrará los datos del archivo local.
-   No importes tu copia real para estas pruebas.
-4. Espera a que termine de cargar. Añade un hábito ficticio y un objetivo.
-5. Recarga y comprueba hábitos, navegación, historial y «Tu semana».
-6. Detén el servidor con Control+C y recarga la misma dirección. Tras haberse
-   instalado correctamente el service worker, la aplicación debe seguir abriendo.
-   Marca y desmarca el hábito; recarga y comprueba que se conserva.
-7. Arranca otra vez el servidor para recuperar la conexión.
+El aviso no debe aparecer otra vez sin una nueva actualización real. Si se bloquea
+por borradores o ventanas adicionales, guarda o cierra esas ventanas y reintenta.
+La v0.9 no contenía misiones; tras actualizar, los nuevos borradores de misión también
+se protegen antes de futuras actualizaciones.
 
-La primera visita necesita conexión al servidor. Abrir el archivo con doble clic
-continúa siendo posible, pero no permite comprobar el service worker.
-No borres los datos generales de Safari para probar o resolver una actualización.
+## Pruebas locales con datos ficticios
 
-## Probar una actualización
+En la carpeta del proyecto, utiliza un puerto nuevo:
 
-1. Con la versión 0.5.0 ya cargada desde localhost, mantén una sola ventana abierta.
-2. En una futura versión, cambia los archivos y aumenta `VERSION` en `sw.js`
-   (por ejemplo a `0.5.1`). Mantén el nombre `sw.js` y su ubicación.
-3. Vuelve a la aplicación con el servidor activo. Se comprueban actualizaciones
-   al abrir, volver a la aplicación y recuperar conexión; la detección puede tardar.
-4. Cuando aparezca «Nueva versión disponible», pulsa «Actualizar».
-5. La página debe recargarse conservando hábitos, identificadores, objetivo e historial.
-6. Si hay otras ventanas de la aplicación, ciérralas y vuelve a intentarlo.
-7. Comprueba que la nueva versión también abre sin conexión al servidor.
+```sh
+python3 -m http.server 8016 --bind 127.0.0.1
+```
 
-No reutilizar un número de caché para archivos distintos. Publicar todos los archivos
-de cada versión juntos y añadir a `FILES` cualquier nuevo recurso necesario sin conexión.
-La activación elimina solo cachés antiguas de esta aplicación y de este ámbito;
-nunca elimina localStorage. No aplicar automáticamente actualizaciones mientras se edita.
+Abre http://127.0.0.1:8016/ en Safari. El puerto tiene datos independientes de producción.
 
-## Antes de instalar en iPhone
+- Prueba Inicio, añadir/marcar/eliminar hábitos y objetivo.
+- Consulta Tu semana y sus estados: 0 %, sin registro, sin hábitos y futuro.
+- Guarda respuestas y revisa las tres modalidades de aprendizaje.
+- Guarda una misión, recarga y comprueba Retomar misión.
+- Tras la primera carga completa y recarga, detén SOLO el servidor de pruebas y
+  recarga: la interfaz, los ejercicios y la misión deben abrir sin conexión.
+- Vuelve a arrancar el servidor al terminar. No detengas otros procesos.
 
-- Elegir una dirección HTTPS estable y publicar los archivos del proyecto, sin `.git`
-  ni copias de seguridad. GitHub Pages puede servirlos desde una subcarpeta: las rutas
-  de esta PWA son relativas para admitir ese caso.
-- No renombrar ni mover la dirección de instalación sin planificar los datos locales.
-- Abrir la dirección publicada en Safari del iPhone y añadirla a la pantalla de inicio
-  (activar «Abrir como app web» si aparece).
-- Empezar a usarla desde su icono. Comprobar instalación, icono, guardado tras cerrar,
-  modo avión y recepción de una segunda versión.
-- Mantener las copias de seguridad: instalar una PWA no hace permanente su almacenamiento.
+Las pruebas automatizadas usan datos y cachés simulados:
 
-`localhost` en el iPhone se refiere al propio iPhone, no al Mac. Una dirección HTTP
-de la red local del Mac no sustituye a HTTPS para probar correctamente esta PWA.
-Las pruebas en Mac no sustituyen la comprobación final en el iPhone.
+```sh
+node --test pruebas/audiovisual.test.cjs
+```
 
-## Datos
+Para el iPhone instalado: después de actualizar con conexión, activa modo avión,
+abre la app y comprueba interfaz y misión usando datos de prueba. Vuelve a activar
+la conexión al terminar. Las pruebas técnicas no sustituyen esta comprobación real.
 
-La clave sigue siendo `mi-panel-habitos-v1` y su estructura no cambia. La PWA guarda
-archivos de la aplicación en Cache Storage, separados de hábitos e historial.
-El cambio de archivo local a dirección web no transfiere datos automáticamente.
-Mac e iPhone mantienen datos independientes; no hay sincronización ni cuentas.
+## Contrato de datos y caché
+
+Se mantienen las claves y estructuras actuales:
+
+- `mi-panel-habitos-v1`: hábitos, objetivo e historial.
+- `mi-progreso-aprendizaje-v1`: respuestas y finalización educativa.
+- `mi-aprendizaje-modalidades-v1`: preferencias.
+- `mi-progreso-misiones-v1`: nuevo registro independiente del piloto.
+
+El service worker almacena archivos, nunca respuestas. Incluye los tres archivos
+`misiones-contenido.js`, `misiones-storage.js` y `misiones.js` junto a toda la interfaz.
+Solo elimina cachés antiguas de su propio ámbito; no borra localStorage.
+La instalación falla si falta algún archivo obligatorio y no fuerza la activación.
+No se descargan vídeos grandes ni recursos externos.
+
+No cambiar dominio, ruta de instalación ni claves sin un plan específico. Los datos
+no se transfieren automáticamente entre Safari, PWA, Mac, iPhone o puertos locales.
+Conserva copias de seguridad: instalar una PWA no garantiza almacenamiento permanente.
+Para futuras publicaciones, cambia VERSION, incluye los nuevos recursos y verifica
+la URL pública. No reutilices la misma versión de caché para contenidos distintos.

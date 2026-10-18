@@ -52,8 +52,8 @@
   button.addEventListener("click", async () => {
     if (applying) return;
     if (!waitingUpdate()) { showUpdate(); return; }
-    if (window.MPDLearning?.hasUnsavedChanges()) {
-      message.textContent = "Tienes respuestas educativas sin guardar. Guárdalas antes de actualizar.";
+    if (window.MPDLearning?.hasUnsavedChanges() || window.MPDMission?.hasUnsavedChanges()) {
+      message.textContent = "Tienes respuestas o una misión sin guardar. Guarda los cambios antes de actualizar.";
       return;
     }
     applying = true;
@@ -68,6 +68,7 @@
       await navigator.locks.request("mi-panel-habitos-v1", () => {});
       await navigator.locks.request("mi-progreso-aprendizaje-v1", () => {});
       await navigator.locks.request("mi-aprendizaje-modalidades-v1", () => {});
+      if(window.MPDMissionStore)await navigator.locks.request(window.MPDMissionStore.key, () => {});
       if (document.getElementById("savedStatus").textContent.startsWith("Aviso:")) {
         throw new Error("Hay un aviso de guardado. Resuélvelo antes de actualizar.");
       }
