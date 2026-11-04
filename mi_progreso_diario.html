@@ -11,15 +11,6 @@
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <script src="./pwa.js" defer></script>
-  <link rel="stylesheet" href="./aprendizaje.css">
-  <script src="./aprendizaje-contenido.js" defer></script>
-  <script src="./aprendizaje-storage.js" defer></script>
-  <script src="./aprendizaje-progreso.js" defer></script>
-  <script src="./aprendizaje-preferencias.js" defer></script>
-  <script src="./misiones-contenido.js" defer></script>
-  <script src="./misiones-storage.js" defer></script>
-  <script src="./misiones.js" defer></script>
-  <script src="./aprendizaje.js" defer></script>
   <style>
     :root {font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark; background:#0b1220;color:#edf2ff}
     * {box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#1c3155 0%,#0b1220 55%);padding:36px 16px} main{max-width:700px;margin:auto}
@@ -249,15 +240,13 @@ body { padding-top:calc(16px + env(safe-area-inset-top,0px)); padding-left:max(1
 #inicio .dashboard-hint { display:block; font-size:12px; color:#ACA69D; }
 #inicio .goal-editor { margin:0; }
 #inicio .goal-editor:not([open]) > summary { display:none; }
-#inicio .dashboard-learning button { width:100%; }
 #inicio .dashboard-recent { grid-column:1 / -1; }
 body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px; padding:0; border:0; background:transparent; font-size:13px; }
 @media(max-width:759px) {
   #inicio .dashboard-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  #inicio .dashboard-today,#inicio .dashboard-pending-card,#inicio .dashboard-learning { grid-column:1 / -1; }
-  #inicio .dashboard-objective button,#inicio .dashboard-mission button { width:100%; }
+  #inicio .dashboard-today,#inicio .dashboard-pending-card { grid-column:1 / -1; }
+  #inicio .dashboard-objective button { width:100%; }
   #inicio .dashboard-objective:has(details[open]) { grid-column:1 / -1; }
-  #inicio .dashboard-objective:has(details[open]) + .dashboard-mission { grid-column:1 / -1; }
 }
 @media(max-width:359px) {
   #inicio .dashboard-grid { grid-template-columns:minmax(0,1fr); }
@@ -273,6 +262,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <script src="./comunidad-datos.js" defer></script>
   <script src="./comunidad.js" defer></script>
   <link rel="stylesheet" href="./perfil.css">
+  <script src="./perfil-foto.js" defer></script>
   <script src="./perfil.js" defer></script>
 </head>
 <body>
@@ -283,10 +273,8 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   </aside>
   <header class="app-header"><h1>Mi Progreso Diario</h1></header>
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
-  <p class="global-save-status" id="learningGlobalStatus" role="status" hidden></p>
-  <p class="global-save-status" id="missionGlobalStatus" role="status" hidden></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.12.0</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.13.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -298,11 +286,6 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
         <div class="head"><details class="pending-disclosure"><summary><h2 id="pendingTitle">Pendientes de hoy</h2><span class="dashboard-hint">Ver resumen</span></summary><ul id="pendingHabits" class="dashboard-pending"></ul></details><button type="button" id="viewAllHabits" class="secondary-action">Ir a Hábitos</button></div>
         <p id="pendingStatus" class="muted"></p>
       </section>
-      <section class="card dashboard-learning" aria-labelledby="dashboardLearningTitle">
-        <h2 id="dashboardLearningTitle"><svg class="nav-icon dashboard-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg>Continuar aprendiendo</h2>
-        <p id="dashboardLearningText" class="muted">Preparando tu siguiente paso…</p>
-        <button type="button" id="dashboardLearningButton" disabled>Continuar aprendiendo</button>
-      </section>
       <section class="card dashboard-objective" aria-labelledby="goalTitle">
         <h2 id="goalTitle"><svg class="nav-icon dashboard-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V3m0 1h14l-3 4 3 4H4"/></svg>Objetivo semanal</h2>
         <p id="goalCompactPreview" class="muted"></p>
@@ -313,11 +296,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
         </details>
         <button type="button" id="editGoal" class="secondary-action">Ver o editar</button>
       </section>
-      <section class="card dashboard-mission" aria-labelledby="missionShortcutTitle">
-        <h2 id="missionShortcutTitle"><svg class="nav-icon dashboard-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm6-2 6 6"/></svg>Detective de problemas</h2>
-        <p class="muted">Práctica en la vida real</p>
-        <button type="button" id="dashboardMissionButton" class="secondary-action">Probar Detective de problemas</button>
-      </section>
+      <section class="card" aria-labelledby="homePodcastsTitle"><h2 id="homePodcastsTitle">Podcasts</h2><p class="muted">Un espacio para escuchar ideas y encontrar inspiración.</p><button type="button" class="secondary-action" id="homePodcasts">Explorar Podcasts</button></section>
       <details id="recentActivity" class="card dashboard-recent" hidden>
         <summary><h2 id="recentTitle">Actividad reciente</h2></summary><p id="recentSummary" class="muted"></p>
       </details>
@@ -362,16 +341,11 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   </section>
   </section>
   <section id="podcasts" class="app-view" aria-labelledby="podcastsTitle" hidden>
-    <h2 id="podcastsTitle" class="view-title">Podcasts</h2>
+    <h2 id="podcastsTitle" class="view-title">Podcasts</h2><button type="button" id="podcastsBack" class="secondary-action">Volver a Inicio</button>
     <div class="card coming-soon">
       <p class="eyebrow">Próximamente</p>
       <p class="muted">Un espacio para escuchar ideas que te ayuden a crecer.</p>
     </div>
-  </section>
-  <section id="aprendizaje" class="app-view" aria-labelledby="aprendizajeTitle" hidden>
-    <h2 id="aprendizajeTitle" class="view-title">Aprendizaje</h2>
-    <div id="learningRoutes"></div>
-    <noscript><p class="muted">Activa JavaScript para explorar las rutas de aprendizaje.</p></noscript>
   </section>
   <section id="comunidad" class="app-view" aria-labelledby="comunidadTitle" hidden>
     <p class="eyebrow">Ideas que conectan · DEMO</p>
@@ -392,22 +366,26 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <section id="perfil" class="app-view" aria-labelledby="perfilTitle" hidden>
     <p class="eyebrow">Tu espacio</p><h2 id="perfilTitle" class="view-title">Mi perfil</h2>
     <p class="community-notice">Perfil local y privado en este navegador. No se publica en Descubrir ni crea una cuenta. Borrar los datos del navegador puede eliminarlo.</p>
-    <div class="profile-layout">
-      <section class="card profile-preview" aria-labelledby="profilePreviewTitle"><p class="eyebrow" id="profilePreviewTitle">Vista previa · solo tú</p><div id="profilePreview"></div></section>
+    <div id="profileDisplay">
+      <section class="card profile-preview" aria-label="Tu perfil privado"><div id="profilePreview"></div><button type="button" id="profileEdit">Editar perfil</button><p id="profileDisplayStatus" role="status" aria-live="polite"></p></section>
+    </div>
+    <div id="profileEditor" hidden>
+      <h3 id="profileEditorTitle" tabindex="-1">Editar perfil</h3>
       <form id="profileForm" class="card" aria-label="Editar mi perfil">
+        <div class="profile-field"><label for="profilePhoto">Fotografía privada (opcional)</label><input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp"><p class="muted">JPEG, PNG o WebP, hasta 10 MB. Se comprime y guarda solo en este dispositivo.</p><div id="profilePhotoPreview" aria-live="polite"></div><button type="button" id="profilePhotoRemove" class="secondary-action">Eliminar fotografía</button></div>
 <div class="profile-field"><label for="profile-alias">Nombre visible o alias</label><input type="text" id="profile-alias" name="alias" maxlength="60" required></div>
 <div class="profile-field"><label for="profile-avatar">Avatar opcional (iniciales o emoji)</label><input type="text" id="profile-avatar" name="avatar" maxlength="8"></div>
 <div class="profile-field"><label for="profile-bio">Breve descripción</label><textarea id="profile-bio" name="bio" maxlength="300" rows="3"></textarea></div>
 <div class="profile-field"><label for="profile-city">Ciudad aproximada (opcional)</label><input type="text" id="profile-city" name="city" maxlength="80"></div>
+<div class="profile-field"><label for="profile-occupation">Ocupación o actividad profesional</label><input type="text" id="profile-occupation" name="occupation" maxlength="120"></div>
 <div class="profile-field"><label for="profile-interests">Intereses y habilidades</label><textarea id="profile-interests" name="interests" maxlength="200" rows="3"></textarea></div>
 <div class="profile-field"><label for="profile-project">Proyecto actual</label><input type="text" id="profile-project" name="project" maxlength="120"></div>
 <div class="profile-field"><label for="profile-learning">Qué estás construyendo o aprendiendo</label><textarea id="profile-learning" name="learning" maxlength="500" rows="3"></textarea></div>
 <div class="profile-field"><label for="profile-goal">Objetivo personal o profesional</label><textarea id="profile-goal" name="goal" maxlength="300" rows="3"></textarea></div>
         <div class="profile-field"><label for="profile-links">Enlaces públicos voluntarios</label><textarea id="profile-links" name="links" maxlength="2000" rows="4" placeholder="https://… (uno por línea, hasta 5)" aria-describedby="profileLinksHint"></textarea><p class="muted" id="profileLinksHint">Instagram, YouTube, X, LinkedIn o tu proyecto. Solo direcciones HTTPS completas, sin credenciales.</p></div>
-        <p id="profileStatus" role="status" aria-live="polite"></p><button type="submit" id="profileSave">Guardar perfil local</button>
+        <p id="profileStatus" role="status" aria-live="polite"></p><div class="profile-actions"><button type="submit" id="profileSave">Guardar cambios</button><button type="button" id="profileCancel" class="secondary-action">Cancelar sin guardar</button></div>
       </form>
     </div>
-    <details class="card profile-resources"><summary>Más recursos</summary><p class="muted">Tus módulos y su progreso siguen disponibles.</p><button type="button" id="profileLearning">Abrir Aprendizaje</button> <button type="button" id="profilePodcasts">Abrir Podcasts</button></details>
     <noscript>Activa JavaScript para editar tu perfil local.</noscript>
   </section>
   <p class="footer">Tus datos se guardan solo en este navegador y dispositivo. No se envían a ningún servidor. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
@@ -436,6 +414,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   // Cambiar de vista no recarga la página ni modifica los datos guardados.
   const navButtons = document.querySelectorAll(".nav-button");
   function showView(viewId) {
+    if(viewId === "perfil") window.MPDProfile?.enter();
     document.querySelectorAll(".app-view").forEach(view => {
       view.hidden = view.id !== viewId;
     });
@@ -746,14 +725,8 @@ felicitacion.hidden = !(
   }
   document.getElementById("viewAllHabits").addEventListener("click",()=>showView("habitos"));
   document.getElementById("editGoal").addEventListener("click",()=>{document.getElementById("goalEditor").open=true;goal.focus();});
-  document.getElementById("dashboardMissionButton").addEventListener("click",()=>{
-    if(!window.MPDMission){document.getElementById("missionGlobalStatus").hidden=false;document.getElementById("missionGlobalStatus").textContent="La misión no está disponible. Abre la versión local con el servidor activo.";return;}
-    showView("aprendizaje");window.MPDMission.open(()=>showView("inicio"));
-  });
-  document.getElementById("dashboardLearningButton").addEventListener("click",()=>{
-    if(!window.MPDLearning?.continueRecommended)return;
-    showView("aprendizaje");window.MPDLearning.continueRecommended();
-  });
+  document.getElementById("podcastsBack").addEventListener("click",()=>showView("inicio"));
+  document.getElementById("homePodcasts").addEventListener("click",()=>showView("podcasts"));
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh();});
   window.addEventListener("storage",event=>{
     if (event.key === STORAGE_KEY || event.key === null) refresh();

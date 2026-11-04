@@ -52,7 +52,7 @@
   button.addEventListener("click", async () => {
     if (applying) return;
     if (!waitingUpdate()) { showUpdate(); return; }
-    if (window.MPDProfile?.hasUnsavedChanges() || window.MPDLearning?.hasUnsavedChanges() || window.MPDMission?.hasUnsavedChanges()) {
+    if (window.MPDProfile?.hasUnsavedChanges()) {
       message.textContent = "Tienes cambios sin guardar. Guarda los cambios antes de actualizar.";
       return;
     }
@@ -66,9 +66,6 @@
       if (!navigator.locks?.request) throw new Error("No se puede comprobar el fin del guardado.");
       // Solo espera el mismo bloqueo que usa la aplicación; no modifica el almacenamiento.
       await navigator.locks.request("mi-panel-habitos-v1", () => {});
-      await navigator.locks.request("mi-progreso-aprendizaje-v1", () => {});
-      await navigator.locks.request("mi-aprendizaje-modalidades-v1", () => {});
-      if(window.MPDMissionStore)await navigator.locks.request(window.MPDMissionStore.key, () => {});
       if (document.getElementById("savedStatus").textContent.startsWith("Aviso:")) {
         throw new Error("Hay un aviso de guardado. Resuélvelo antes de actualizar.");
       }

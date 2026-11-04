@@ -43,8 +43,8 @@ function makeApp(mem=memory(),options={}) {
   class Clock extends Date{constructor(...args){super(...(args.length?args:[mem.day+'T12:00:00']));}}
   const context=vm.createContext({window,document,Date:Clock,Intl,URL,console,crypto:webcrypto,
     MutationObserver:class{constructor(fn){observers.push(fn);}observe(){}},setInterval(){},
-    navigator:{locks:{request(key,fn){assert.ok([DATA,PREF,HABITS,MISSION].includes(key));const job=mem.queue.then(fn);mem.queue=job.catch(()=>{});return job;}}},
-    localStorage:{getItem(key){assert.ok([DATA,PREF,HABITS,MISSION].includes(key));return mem.values.get(key) ?? null;},setItem(key,value){assert.ok([DATA,PREF,HABITS,MISSION].includes(key));if(mem.fail)throw Error('Cuota agotada');mem.writes.push(key);mem.values.set(key,value);}}});
+    navigator:{locks:{request(key,fn){assert.ok([DATA,PREF,HABITS,MISSION,'mi-progreso-perfil-v1'].includes(key));const job=mem.queue.then(fn);mem.queue=job.catch(()=>{});return job;}}},
+    localStorage:{getItem(key){assert.ok([DATA,PREF,HABITS,MISSION,'mi-progreso-perfil-v1'].includes(key));return mem.values.get(key) ?? null;},setItem(key,value){assert.ok([DATA,PREF,HABITS,MISSION,'mi-progreso-perfil-v1'].includes(key));if(mem.fail)throw Error('Cuota agotada');mem.writes.push(key);mem.values.set(key,value);}}});
   scripts.forEach(name=>vm.runInContext(read(name),context));
   const route=window.MPDLearningCatalog[0],lesson=route.modules[0].lessons[0];
   if(!options.journey)delete lesson.journey; // También comprobamos la presentación anterior y audiovisual.
@@ -181,8 +181,8 @@ test('la PWA existente conserva caché y actividad offline; no incluye medios gr
   const events={},scope='https://example.test/app/',prefix='mi-progreso-diario:'+scope+':',maps=new Map([[prefix+'anterior',new Map()],['otra-app',new Map()]]);
   const context=vm.createContext({URL,Request,fetch(){throw Error('Sin red');},caches:{async open(key){if(!maps.has(key))maps.set(key,new Map());const map=maps.get(key);return {async addAll(requests){for(const request of requests){assert.equal(request.cache,'reload');const file=new URL(request.url).pathname.slice('/app/'.length)||'index.html';assert.ok(!/\.(mp4|mp3|webm|wav)$/.test(file));map.set(request.url,fs.readFileSync(path.join(ROOT,file)));}},async match(url){return map.get(url);}};},async keys(){return [...maps.keys()];},async delete(key){return maps.delete(key);}},self:{registration:{scope},addEventListener(type,fn){events[type]=fn;},clients:{async claim(){}}}});
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await pending;events.activate({waitUntil(p){pending=p;}});await pending;
-  assert.ok(maps.has(prefix+'0.12.0'));assert.ok(maps.has('otra-app'));
-  for(const file of ['index.html','mi_progreso_diario.html','pwa.js','aprendizaje-contenido.js','aprendizaje.js','aprendizaje-progreso.js','aprendizaje-storage.js','aprendizaje-preferencias.js','aprendizaje.css','misiones-contenido.js','misiones-storage.js','misiones.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
+  assert.ok(maps.has(prefix+'0.13.0'));assert.ok(maps.has('otra-app'));
+  for(const file of ['index.html','mi_progreso_diario.html','pwa.js','perfil.js','perfil-foto.js','comunidad.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
 });
 
 test('diseño móvil y accesibilidad básica: etiquetas, movimiento reducido y alternativas',()=>{
@@ -334,17 +334,15 @@ test('Objetivo con fallo conserva su borrador durante navegación y no confirma 
   await goal.fire('input');assert.equal(JSON.parse(app.mem.values.get(HABITS)).weeklyGoal,goal.value);
 });
 
-test('Inicio reutiliza recomendación y errores educativos son visibles fuera de Aprendizaje',async()=>{
-  const app=makeApp(memory(),{core:true,journey:true});await startCore(app);
-  const action=app.document.getElementById('dashboardLearningButton');assert.equal(action.disabled,false);
-  await action.fire('click');assert.equal(app.document.getElementById('aprendizaje').hidden,false);assert.ok(app.current().id.startsWith('lesson-'));
-  assert.equal(app.mem.values.has(PREF),false);assert.equal(app.mem.values.has(DATA),false);
-  const field=app.elements.find(n=>n.tag==='textarea'&&n.id.endsWith('-problema'));field.value='Práctica de prueba';await field.fire('input');
-  app.mem.fail=true;const parent=field.parentElement;await parent.querySelectorAll('button').find(n=>n.textContent==='Guardar respuesta').fire('click');
-  assert.equal(app.document.getElementById('learningGlobalStatus').hidden,false);
-  await vm.runInContext('showView("inicio");refresh()',app.context);assert.equal(field.value,'Práctica de prueba');
-  assert.equal(app.document.getElementById('learningGlobalStatus').hidden,false);
-  assert.equal(app.store.read().completed[LESSON],undefined);
+test('Inicio ofrece Podcasts sin accesos educativos y conserva datos antiguos',async()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');
+  assert.ok(!/aprendizaje|misiones|dashboardLearning|dashboardMission|learningGlobalStatus|missionGlobalStatus/.test(html));
+  assert.ok(!/aprendizaje|misiones/.test(sw));
+  const app=makeApp(memory(),{core:true,render:false});await startCore(app);
+  await app.document.getElementById('homePodcasts').fire('click');assert.equal(app.document.getElementById('podcasts').hidden,false);
+  await app.document.getElementById('podcastsBack').fire('click');assert.equal(app.document.getElementById('inicio').hidden,false);
+  const profile=html.slice(html.indexOf('<section id="perfil"'),html.indexOf('</main>'));
+  assert.ok(!/Más recursos|profileLearning|profilePodcasts/.test(profile));
 });
 
 function habitFixture(mem){
@@ -470,23 +468,16 @@ test('Misión actualiza otras ventanas sin sobrescribir borradores y permite los
   for(const choice of choices){choices.forEach(n=>n.checked=n===choice);await choice.fire('change');await missionButton(a,'Guardar progreso').fire('click');assert.equal(a.window.MPDMissionStore.read().investigationStatus,choice.value);}
 });
 
-test('Misión enlaza desde Inicio y la lección, con etiquetas accesibles y sin nueva pestaña',async()=>{
-  const app=makeApp(memory(),{core:true,journey:true,mission:true});await startCore(app);
-  await app.document.getElementById('dashboardMissionButton').fire('click');assert.equal(app.document.getElementById('aprendizaje').hidden,false);assert.equal(app.document.getElementById('learningRoutes').hidden,true);
-  assert.equal(app.document.activeElement.id,'mission-title');await missionButton(app,'← Volver').fire('click');assert.equal(app.document.getElementById('inicio').hidden,false);
-  const launch=app.elements.find(n=>n.tag==='button'&&n.textContent==='Detective de problemas · Misión práctica');assert.ok(launch);
-  const before=app.model();await launch.fire('click');assert.equal(app.document.getElementById('mission-detective').hidden,false);await missionButton(app,'← Volver').fire('click');assert.equal(app.document.activeElement,launch);
-  assert.equal(app.model().saved,before.saved);assert.equal(app.model().badges.filter(n=>n.earned).length,before.badges.filter(n=>n.earned).length);
-  for(const id of ['observation','investigation','reflection'])assert.ok(app.elements.some(n=>n.tag==='label'&&n.htmlFor===missionInput(app,id).id));
+test('código educativo conservado como archivo reversible sin carga en la aplicación',()=>{
+  for(const file of ['aprendizaje.js','misiones.js','aprendizaje-storage.js'])assert.ok(fs.existsSync(path.join(ROOT,file)));
   assert.equal([...read('mi_progreso_diario.html').matchAll(/class="nav-button"/g)].length,4);
-  assert.ok(read('aprendizaje.css').includes('.mission-view'));assert.ok(read('pwa.js').includes('window.MPDMission?.hasUnsavedChanges()'));
 });
 
-test('publicación v0.12.0: todos los recursos de ejecución están incluidos en caché',()=>{
-  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.12.0'));assert.ok(sw.includes('const VERSION = "0.12.0"'));
+test('publicación v0.13.0: todos los recursos de ejecución están incluidos en caché',()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.13.0'));assert.ok(sw.includes('const VERSION = "0.13.0"'));
   const files=[...sw.matchAll(/"\.\/([^"\n]+)"/g)].map(m=>m[1]);
   for(const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)){assert.ok(files.includes(match[1]),match[1]);assert.ok(fs.existsSync(path.join(ROOT,match[1])));}
-  for(const file of ['misiones-contenido.js','misiones-storage.js','misiones.js'])assert.ok(files.includes(file));
+  for(const file of ['perfil.js','perfil-foto.js','comunidad.js'])assert.ok(files.includes(file));
 });
 
 test('actualización PWA protege borradores, espera guardados y no repite el aviso tras activarse',async()=>{
@@ -496,14 +487,14 @@ test('actualización PWA protege borradores, espera guardados y no repite el avi
   const serviceWorker={controller,addEventListener(type,fn){swEvents[type]=fn;},register:async()=>reg};
   app.context.navigator.serviceWorker=serviceWorker;app.context.navigator.onLine=true;
   app.context.navigator.locks.request=async(key,fn)=>{locks.push(key);return fn();};
-  app.window.isSecureContext=true;app.window.MPDMission={hasUnsavedChanges:()=>dirty};app.window.MPDMissionStore={key:MISSION};
+  app.window.isSecureContext=true;app.window.MPDProfile={hasUnsavedChanges:()=>dirty};app.window.MPDMissionStore={key:MISSION};
   app.context.location={protocol:'https:',reload(){reloads++;}};
   app.context.setTimeout=(fn,delay)=>{const id=timers.size+1;timers.set(id,{fn,delay});return id;};app.context.clearTimeout=id=>timers.delete(id);
   app.document.getElementById('savedStatus').textContent='Datos guardados en este navegador.';
   vm.runInContext(read('pwa.js'),app.context);await new Promise(setImmediate);
   const banner=app.document.getElementById('pwaUpdate'),button=app.document.getElementById('pwaUpdateButton');
   assert.equal(banner.hidden,false);await button.fire('click');assert.equal(sent.length,0);assert.ok(app.document.getElementById('pwaUpdateMessage').textContent.includes('sin guardar'));
-  dirty=false;app.window.MPDProfile={hasUnsavedChanges:()=>true};await button.fire('click');assert.equal(sent.length,0);app.window.MPDProfile.hasUnsavedChanges=()=>false;await button.fire('click');assert.deepEqual(locks,[HABITS,DATA,PREF,MISSION]);assert.equal(sent[0].type,'APPLY_UPDATE');
+  dirty=false;app.window.MPDProfile={hasUnsavedChanges:()=>true};await button.fire('click');assert.equal(sent.length,0);app.window.MPDProfile.hasUnsavedChanges=()=>false;await button.fire('click');assert.deepEqual(locks,[HABITS]);assert.equal(sent[0].type,'APPLY_UPDATE');
   serviceWorker.controller=worker;reg.waiting=null;worker.state='activated';swEvents.controllerchange();
   assert.equal(reloads,1);assert.equal(banner.hidden,true);assert.equal(button.disabled,false);
   await app.events.online();assert.equal(banner.hidden,true);assert.equal(reloads,1);assert.equal(app.mem.writes.length,0);
@@ -529,7 +520,7 @@ test('Inicio compacto conserva objetivos largos completos y solo resume su prese
 
 test('Inicio compacto: orden semántico, pantallas estrechas, horizontal y texto ampliado sin recortes',()=>{
   const html=read('mi_progreso_diario.html'),home=html.slice(html.indexOf('<section id="inicio"'),html.indexOf('<section id="habitos"'));
-  const ids=['progressLabel','pendingTitle','dashboardLearningTitle','goalTitle','missionShortcutTitle'];
+  const ids=['progressLabel','pendingTitle','goalTitle','homePodcastsTitle'];
   for(let i=1;i<ids.length;i++)assert.ok(home.indexOf('id="'+ids[i-1]+'"')<home.indexOf('id="'+ids[i]+'"'));
   assert.equal((home.match(/id="weeklyGoal"/g)||[]).length,1);assert.ok(home.includes('<details class="pending-disclosure"'));
   const compact=html.slice(html.indexOf('/* Inicio compacto:'),html.indexOf('</style>'));
@@ -582,12 +573,15 @@ test('las cuatro pestañas alternan visibilidad y foco sin perder hábitos o apr
   assert.equal(mem.values.get(DATA),before);
 });
 
-function profileApp(raw=null,fail=false) {
+function profileApp(raw=null,fail=false,photoSource=null) {
   const app=makeApp(memory(),{core:true,render:false});let saved=raw,writes=0;
   app.context.localStorage={getItem(key){assert.equal(key,'mi-progreso-perfil-v1');return saved;},setItem(key,value){assert.equal(key,'mi-progreso-perfil-v1');if(fail)throw Error('Cuota agotada');saved=value;writes++;}};
   app.context.showView=name=>{app.lastView=name;};
+  if(photoSource){class TestURL extends URL {static createObjectURL(){return 'blob:recovered';}static revokeObjectURL(){}}app.context.URL=TestURL;}
+  app.window.MPDPhoto={get:async()=>photoSource,put:async()=> 'photo-test',remove:async()=>{},compress:async file=>file};
+  app.document.getElementById('profileEditor').hidden=true;
   vm.runInContext(read('perfil.js'),app.context);
-  return {...app,lastView:()=>app.lastView,external:value=>{saved=value;},saved:()=>saved,writes:()=>writes,edit:async(key,value)=>{app.document.getElementById('profile-'+key).value=value;await app.document.getElementById('profileForm').fire('input');},save:()=>app.document.getElementById('profileForm').fire('submit',{preventDefault(){}})};
+  return {...app,lastView:()=>app.lastView,external:value=>{saved=value;},saved:()=>saved,writes:()=>writes,edit:async(key,value)=>{await app.window.MPDProfile.ready;app.document.getElementById('profile-'+key).value=value;await app.document.getElementById('profileForm').fire('input');},save:async()=>{await app.window.MPDProfile.ready;return app.document.getElementById('profileForm').fire('submit',{preventDefault(){}});}};
 }
 
 test('perfil local guarda, recupera y previsualiza texto sin interpretar HTML',async()=>{
@@ -598,7 +592,7 @@ test('perfil local guarda, recupera y previsualiza texto sin interpretar HTML',a
   const loaded=profileApp(app.saved());assert.equal(loaded.document.getElementById('profile-alias').value,data.fields.alias);
   const preview=loaded.document.getElementById('profilePreview');assert.equal(preview.querySelectorAll('img').length,0);assert.ok(preview.textContent.includes('<img'));
   const link=preview.querySelectorAll('a')[0];assert.equal(link.rel,'noopener noreferrer');assert.equal(link.target,'_blank');
-  await app.document.getElementById('profileLearning').fire('click');assert.equal(app.lastView(),'aprendizaje');await app.document.getElementById('profilePodcasts').fire('click');assert.equal(app.lastView(),'podcasts');
+  assert.equal(app.document.getElementById('profileEditor').hidden,true);
 });
 
 test('perfil rechaza enlaces inseguros, alias vacío y exceso de enlaces sin guardar',async()=>{
@@ -615,4 +609,83 @@ test('perfil conserva datos inválidos y borradores cuando falla el almacenamien
 
  test('perfil detecta cambios de otra ventana sin sobrescribirlos',async()=>{
   const app=profileApp();await app.edit('alias','Mi borrador');app.external('versión de otra ventana');await app.save();assert.equal(app.saved(),'versión de otra ventana');assert.equal(app.writes(),0);assert.equal(app.document.getElementById('profile-alias').value,'Mi borrador');assert.equal(app.window.MPDProfile.hasUnsavedChanges(),true);
+});
+
+function photoMock(app) {
+  let next=0;const blobs=new Map(),removed=[];
+  class TestURL extends URL {static createObjectURL(){return 'blob:test-'+(++next);}static revokeObjectURL(){}}
+  app.context.URL=TestURL;
+  app.window.MPDPhoto={compress:async file=>file,get:async id=>blobs.get(id),put:async blob=>{const id='photo-'+(++next);blobs.set(id,blob);return id;},remove:async id=>{removed.push(id);blobs.delete(id);}};
+  return {blobs,removed};
+}
+async function selectPhoto(app,file={type:'image/jpeg',size:30000}) {
+  const input=app.document.getElementById('profilePhoto');input.files=[file];await input.fire('change');
+}
+
+test('editor separado permite cancelar texto y volver al perfil guardado',async()=>{
+  const app=profileApp();await app.window.MPDProfile.ready;
+  assert.equal(app.document.getElementById('profileEditor').hidden,true);
+  await app.document.getElementById('profileEdit').fire('click');assert.equal(app.document.getElementById('profileDisplay').hidden,true);
+  await app.edit('alias','Texto cancelado');await app.document.getElementById('profileCancel').fire('click');
+  assert.equal(app.document.getElementById('profileEditor').hidden,true);assert.equal(app.writes(),0);assert.equal(app.window.MPDProfile.hasUnsavedChanges(),false);
+  assert.equal(app.document.getElementById('profile-alias').value,'');assert.ok(!app.document.getElementById('profilePreview').textContent.includes('Texto cancelado'));
+});
+
+test('fotografía se guarda por referencia, cambia y se elimina solo al guardar',async()=>{
+  const app=profileApp(),photos=photoMock(app);await app.edit('alias','Mi foto');await selectPhoto(app);
+  assert.equal(photos.blobs.size,0);assert.equal(app.document.getElementById('profilePhotoPreview').querySelectorAll('img').length,1);
+  await app.save();const first=JSON.parse(app.saved()).photoId;assert.ok(photos.blobs.has(first));assert.equal(app.document.getElementById('profilePreview').querySelectorAll('img').length,1);
+  await selectPhoto(app);await app.save();const second=JSON.parse(app.saved()).photoId;assert.notEqual(second,first);assert.ok(photos.removed.includes(first));
+  await app.document.getElementById('profilePhotoRemove').fire('click');assert.ok(photos.blobs.has(second));await app.document.getElementById('profileCancel').fire('click');assert.equal(JSON.parse(app.saved()).photoId,second);
+  await app.document.getElementById('profilePhotoRemove').fire('click');await app.save();assert.equal(JSON.parse(app.saved()).photoId,null);assert.ok(photos.removed.includes(second));assert.equal(app.document.getElementById('profilePreview').querySelectorAll('img').length,0);
+});
+
+test('fotos canceladas o con fallo no sustituyen referencias guardadas',async()=>{
+  const app=profileApp(null,true),photos=photoMock(app);await app.edit('alias','Borrador');await selectPhoto(app);await app.save();
+  assert.equal(app.saved(),null);assert.equal(photos.blobs.size,0);assert.equal(app.window.MPDProfile.hasUnsavedChanges(),true);
+  await app.document.getElementById('profileCancel').fire('click');assert.equal(app.document.getElementById('profilePhotoPreview').querySelectorAll('img').length,0);
+  app.window.MPDPhoto.compress=async()=>{throw Error('Archivo inválido');};await selectPhoto(app);assert.ok(app.document.getElementById('profileStatus').textContent.includes('Archivo inválido'));
+});
+
+test('cancelar durante compresión descarta su resultado tardío',async()=>{
+  const app=profileApp();photoMock(app);await app.edit('alias','Mi alias');let finish;
+  app.window.MPDPhoto.compress=()=>new Promise(resolve=>{finish=resolve;});
+  const pending=selectPhoto(app);await app.document.getElementById('profileCancel').fire('click');finish({type:'image/jpeg',size:2000});await pending;
+  assert.equal(app.document.getElementById('profilePhotoPreview').querySelectorAll('img').length,0);assert.equal(app.window.MPDProfile.hasUnsavedChanges(),false);
+});
+
+test('perfil 0.12 sin ocupación ni foto se recupera sin migrar o escribir',async()=>{
+  const old={version:1,visibility:'local',fields:{alias:'Alias anterior',avatar:'A',bio:'Biografía',city:'',interests:'Diseño',project:'Idea',learning:'Probando',goal:'Avanzar'},links:[]};
+  const raw=JSON.stringify(old),app=profileApp(raw);await app.window.MPDProfile.ready;
+  assert.equal(app.document.getElementById('profile-alias').value,'Alias anterior');assert.equal(app.document.getElementById('profile-occupation').value,'');assert.equal(app.writes(),0);assert.equal(app.saved(),raw);
+});
+
+test('compresión valida formato, peso y dimensiones y produce JPEG de 512 píxeles',async()=>{
+  const app=makeApp(memory(),{core:true,render:false});let draw,revoked=0;
+  class TestURL extends URL {static createObjectURL(){return 'blob:image';}static revokeObjectURL(){revoked++;}}
+  app.context.URL=TestURL;app.context.Image=class{constructor(){this.naturalWidth=1200;this.naturalHeight=800;}set src(value){this.onload();}};
+  const create=app.document.createElement;
+  app.document.createElement=tag=>tag==='canvas'?{getContext:()=>({fillRect(){},drawImage(...args){draw=args;}}),toBlob(callback,type,quality){assert.equal(this.width,512);assert.equal(this.height,512);assert.equal(type,'image/jpeg');assert.equal(quality,0.8);callback({type,size:10000});}}:create(tag);
+  vm.runInContext(read('perfil-foto.js'),app.context);
+  for(const file of [{type:'image/svg+xml',size:50},{type:'image/jpeg',size:11*1024*1024},{type:'image/png',size:0}])await assert.rejects(app.window.MPDPhoto.compress(file));
+  const blob=await app.window.MPDPhoto.compress({type:'image/jpeg',size:20000});assert.equal(blob.size,10000);assert.deepEqual(draw.slice(1),[200,0,800,800,0,0,512,512]);assert.equal(revoked,1);
+  app.context.Image=class{constructor(){this.naturalWidth=10000;this.naturalHeight=10000;}set src(value){this.onload();}};
+  await assert.rejects(app.window.MPDPhoto.compress({type:'image/png',size:1000}),/dimensiones/);assert.equal(revoked,2);
+  await assert.rejects(app.window.MPDPhoto.get('x'),/avatar/);
+});
+
+test('IndexedDB conserva blobs mediante transacciones completadas',async()=>{
+  const app=makeApp(memory(),{core:true,render:false}),blobs=new Map();
+  const db={createObjectStore(name){assert.equal(name,'photos');},transaction(name,mode){assert.equal(name,'photos');const tx={objectStore(){return {get(key){const req={result:blobs.get(key)};queueMicrotask(()=>tx.oncomplete());return req;},put(blob,key){assert.equal(mode,'readwrite');blobs.set(key,blob);const req={result:key};queueMicrotask(()=>tx.oncomplete());return req;},delete(key){blobs.delete(key);const req={};queueMicrotask(()=>tx.oncomplete());return req;}};}};return tx;}};
+  app.window.indexedDB={open(name,version){assert.equal(name,'mi-progreso-fotos-v1');assert.equal(version,1);const req={result:db};queueMicrotask(()=>{req.onupgradeneeded();req.onsuccess();});return req;}};
+  vm.runInContext(read('perfil-foto.js'),app.context);const blob={type:'image/jpeg',size:1234};const id=await app.window.MPDPhoto.put(blob);assert.equal(await app.window.MPDPhoto.get(id),blob);await app.window.MPDPhoto.remove(id);assert.equal(await app.window.MPDPhoto.get(id),undefined);
+});
+
+test('foto persistida se recupera y volver a Mi perfil muestra tarjeta sin perder el borrador',async()=>{
+  const base=profileApp();await base.edit('alias','Perfil persistido');await base.save();const data=JSON.parse(base.saved());data.photoId='photo-persisted';
+  const app=profileApp(JSON.stringify(data),false,{type:'image/jpeg',size:1000});await app.window.MPDProfile.ready;
+  assert.equal(app.document.getElementById('profilePreview').querySelectorAll('img').length,1);assert.equal(app.writes(),0);
+  await app.document.getElementById('profileEdit').fire('click');await app.edit('occupation','Diseño');app.window.MPDProfile.enter();
+  assert.equal(app.document.getElementById('profileEditor').hidden,true);assert.equal(app.window.MPDProfile.hasUnsavedChanges(),true);
+  await app.document.getElementById('profileEdit').fire('click');assert.equal(app.document.getElementById('profile-occupation').value,'Diseño');
 });
