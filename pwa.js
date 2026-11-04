@@ -52,8 +52,8 @@
   button.addEventListener("click", async () => {
     if (applying) return;
     if (!waitingUpdate()) { showUpdate(); return; }
-    if (window.MPDLearning?.hasUnsavedChanges() || window.MPDMission?.hasUnsavedChanges()) {
-      message.textContent = "Tienes respuestas o una misión sin guardar. Guarda los cambios antes de actualizar.";
+    if (window.MPDProfile?.hasUnsavedChanges() || window.MPDLearning?.hasUnsavedChanges() || window.MPDMission?.hasUnsavedChanges()) {
+      message.textContent = "Tienes cambios sin guardar. Guarda los cambios antes de actualizar.";
       return;
     }
     applying = true;

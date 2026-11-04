@@ -1,0 +1,17 @@
+.profile-layout { display:grid; gap:18px; }
+#profileForm { display:flex; flex-direction:column; gap:18px; margin:0 0 18px; min-width:0; }
+.profile-field { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.profile-field label { font-size:14px; color:#e9d19a; }
+.profile-field textarea { min-height:90px; }
+.profile-field input { min-height:48px; }
+.profile-field .muted { margin:0; line-height:1.5; }
+.profile-preview { min-width:0; overflow-wrap:anywhere; }
+.profile-preview h3 { font-size:24px; margin:6px 0; }
+.profile-preview h4 { color:#e9d19a; margin-bottom:6px; }
+.profile-preview p { white-space:pre-wrap; line-height:1.6; }
+.profile-preview a { display:block; color:#e9d19a; padding:12px 0; min-height:44px; }
+#profileStatus { line-height:1.6; margin:0; }
+.profile-resources summary { cursor:pointer; min-height:44px; padding:12px 0; }
+.profile-resources button { min-height:44px; margin:4px 0; }
+#perfil :focus-visible { outline:3px solid #e9d19a; outline-offset:3px; }
+@media(min-width:760px) { #perfil { max-width:960px; } .profile-layout { grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); align-items:start; } }

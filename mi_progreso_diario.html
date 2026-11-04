@@ -135,7 +135,7 @@ button:focus-visible { outline: 2px solid #E9D19A; outline-offset: 4px; }
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -8px 30px #0004;
 }
-.nav-items { max-width: 700px; margin: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.nav-items { max-width: 700px; margin: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
 .nav-button {
   display: flex;
   flex-direction: column;
@@ -272,6 +272,8 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <link rel="stylesheet" href="./comunidad.css">
   <script src="./comunidad-datos.js" defer></script>
   <script src="./comunidad.js" defer></script>
+  <link rel="stylesheet" href="./perfil.css">
+  <script src="./perfil.js" defer></script>
 </head>
 <body>
 <main>
@@ -284,7 +286,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <p class="global-save-status" id="learningGlobalStatus" role="status" hidden></p>
   <p class="global-save-status" id="missionGlobalStatus" role="status" hidden></p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.11.0</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.12.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -373,7 +375,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   </section>
   <section id="comunidad" class="app-view" aria-labelledby="comunidadTitle" hidden>
     <p class="eyebrow">Ideas que conectan · DEMO</p>
-    <h2 id="comunidadTitle" class="view-title">Comunidad</h2>
+    <h2 id="comunidadTitle" class="view-title">Descubrir</h2>
     <p class="sub">Descubre proyectos, caminos y ganas de aprender.</p>
     <p class="community-notice">Prototipo DEMO: todos los nombres, historias y proyectos son ficticios. No son usuarios reales.</p>
     <label for="communitySearch">Busca por interés, proyecto o ciudad</label>
@@ -387,6 +389,27 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
       <div id="communityDetail"></div>
     </dialog>
   </section>
+  <section id="perfil" class="app-view" aria-labelledby="perfilTitle" hidden>
+    <p class="eyebrow">Tu espacio</p><h2 id="perfilTitle" class="view-title">Mi perfil</h2>
+    <p class="community-notice">Perfil local y privado en este navegador. No se publica en Descubrir ni crea una cuenta. Borrar los datos del navegador puede eliminarlo.</p>
+    <div class="profile-layout">
+      <section class="card profile-preview" aria-labelledby="profilePreviewTitle"><p class="eyebrow" id="profilePreviewTitle">Vista previa · solo tú</p><div id="profilePreview"></div></section>
+      <form id="profileForm" class="card" aria-label="Editar mi perfil">
+<div class="profile-field"><label for="profile-alias">Nombre visible o alias</label><input type="text" id="profile-alias" name="alias" maxlength="60" required></div>
+<div class="profile-field"><label for="profile-avatar">Avatar opcional (iniciales o emoji)</label><input type="text" id="profile-avatar" name="avatar" maxlength="8"></div>
+<div class="profile-field"><label for="profile-bio">Breve descripción</label><textarea id="profile-bio" name="bio" maxlength="300" rows="3"></textarea></div>
+<div class="profile-field"><label for="profile-city">Ciudad aproximada (opcional)</label><input type="text" id="profile-city" name="city" maxlength="80"></div>
+<div class="profile-field"><label for="profile-interests">Intereses y habilidades</label><textarea id="profile-interests" name="interests" maxlength="200" rows="3"></textarea></div>
+<div class="profile-field"><label for="profile-project">Proyecto actual</label><input type="text" id="profile-project" name="project" maxlength="120"></div>
+<div class="profile-field"><label for="profile-learning">Qué estás construyendo o aprendiendo</label><textarea id="profile-learning" name="learning" maxlength="500" rows="3"></textarea></div>
+<div class="profile-field"><label for="profile-goal">Objetivo personal o profesional</label><textarea id="profile-goal" name="goal" maxlength="300" rows="3"></textarea></div>
+        <div class="profile-field"><label for="profile-links">Enlaces públicos voluntarios</label><textarea id="profile-links" name="links" maxlength="2000" rows="4" placeholder="https://… (uno por línea, hasta 5)" aria-describedby="profileLinksHint"></textarea><p class="muted" id="profileLinksHint">Instagram, YouTube, X, LinkedIn o tu proyecto. Solo direcciones HTTPS completas, sin credenciales.</p></div>
+        <p id="profileStatus" role="status" aria-live="polite"></p><button type="submit" id="profileSave">Guardar perfil local</button>
+      </form>
+    </div>
+    <details class="card profile-resources"><summary>Más recursos</summary><p class="muted">Tus módulos y su progreso siguen disponibles.</p><button type="button" id="profileLearning">Abrir Aprendizaje</button> <button type="button" id="profilePodcasts">Abrir Podcasts</button></details>
+    <noscript>Activa JavaScript para editar tu perfil local.</noscript>
+  </section>
   <p class="footer">Tus datos se guardan solo en este navegador y dispositivo. No se envían a ningún servidor. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
 </main>
 <nav class="bottom-nav" aria-label="Navegación principal">
@@ -399,17 +422,13 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
       <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg>
       <span>Hábitos</span>
     </button>
-    <button type="button" class="nav-button" data-view="podcasts" aria-controls="podcasts">
-      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="12" width="4" height="8" rx="2"/><rect x="17" y="12" width="4" height="8" rx="2"/></svg>
-      <span>Podcasts</span>
-    </button>
-    <button type="button" class="nav-button" data-view="aprendizaje" aria-controls="aprendizaje">
-      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z"/></svg>
-      <span>Aprendizaje</span>
-    </button>
     <button type="button" class="nav-button" data-view="comunidad" aria-controls="comunidad">
       <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 5a3 3 0 0 1 0 6m3 10v-3a7 7 0 0 0-3-6"/></svg>
-      <span>Comunidad</span>
+      <span>Descubrir</span>
+    </button>
+    <button type="button" class="nav-button" data-view="perfil" aria-controls="perfil">
+      <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/></svg>
+      <span>Mi perfil</span>
     </button>
   </div>
 </nav>
