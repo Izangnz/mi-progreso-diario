@@ -1,10 +1,11 @@
 /* Cambiar VERSION en cada publicación que modifique archivos de la aplicación.
    Mantener este archivo en la misma dirección. Nunca guarda datos personales. */
-const VERSION = "0.10.2";
+const VERSION = "0.11.0";
 const CACHE_PREFIX = `mi-progreso-diario:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const FILES = [
   "./", "./index.html", "./mi_progreso_diario.html", "./pwa.js",
+  "./comunidad.css", "./comunidad-datos.js", "./comunidad.js",
   "./aprendizaje.js", "./aprendizaje.css",
   "./aprendizaje-contenido.js", "./aprendizaje-storage.js",
   "./aprendizaje-progreso.js",

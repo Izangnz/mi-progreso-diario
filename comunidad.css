@@ -1,0 +1,21 @@
+/* Comunidad comparte los tonos y componentes de la aplicación. */
+.community-notice { background:#30291d; border:1px solid #665337; border-radius:14px; padding:14px; color:#e9d19a; font-size:14px; line-height:1.6; }
+#communitySearch { display:block; width:100%; min-height:48px; margin-top:10px; padding:12px; border:1px solid #62533c; border-radius:12px; background:#121418; color:#f5f1e8; font:inherit; }
+.community-grid { display:grid; gap:16px; }
+.community-card { margin:0; display:flex; flex-direction:column; align-items:flex-start; min-width:0; }
+.community-avatar { width:52px; height:52px; border-radius:18px; display:grid; place-items:center; background:#30291d; color:#e9d19a; font-weight:750; border:1px solid #665337; margin-bottom:14px; }
+.community-card h3 { margin:0; font-size:20px; }
+.community-card h4 { margin:12px 0 0; color:#e9d19a; }
+.community-card p { line-height:1.6; }
+.community-card button { margin-top:auto; min-height:44px; }
+.community-tags { display:flex; flex-wrap:wrap; gap:6px; }
+.community-tags span { border:1px solid #514a3d; border-radius:100px; padding:5px 10px; font-size:12px; color:#e9d19a; }
+#communityProfile { background:#1c1e22; color:#f5f1e8; border:1px solid #665337; border-radius:22px; padding:22px; width:calc(100% - 24px); max-width:540px; max-height:85vh; max-height:85dvh; overflow-y:auto; overscroll-behavior:contain; }
+#communityProfile::backdrop { background:#000b; }
+#communityClose { display:block; margin:0 0 20px auto; min-height:44px; }
+#communityDetail { line-height:1.7; overflow-wrap:anywhere; }
+#communityDetail a { display:block; color:#e9d19a; padding:12px 0; }
+#comunidad :focus-visible, .nav-button:focus-visible { outline:3px solid #e9d19a; outline-offset:3px; }
+@media(min-width:600px) { .community-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:359px) { .nav-items { gap:1px; } .nav-button { font-size:10px; } }
+@media(max-width:480px) { .nav-button { font-size:clamp(10px,2.8vw,12px); } }

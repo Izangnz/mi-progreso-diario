@@ -181,7 +181,7 @@ test('la PWA existente conserva caché y actividad offline; no incluye medios gr
   const events={},scope='https://example.test/app/',prefix='mi-progreso-diario:'+scope+':',maps=new Map([[prefix+'anterior',new Map()],['otra-app',new Map()]]);
   const context=vm.createContext({URL,Request,fetch(){throw Error('Sin red');},caches:{async open(key){if(!maps.has(key))maps.set(key,new Map());const map=maps.get(key);return {async addAll(requests){for(const request of requests){assert.equal(request.cache,'reload');const file=new URL(request.url).pathname.slice('/app/'.length)||'index.html';assert.ok(!/\.(mp4|mp3|webm|wav)$/.test(file));map.set(request.url,fs.readFileSync(path.join(ROOT,file)));}},async match(url){return map.get(url);}};},async keys(){return [...maps.keys()];},async delete(key){return maps.delete(key);}},self:{registration:{scope},addEventListener(type,fn){events[type]=fn;},clients:{async claim(){}}}});
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await pending;events.activate({waitUntil(p){pending=p;}});await pending;
-  assert.ok(maps.has(prefix+'0.10.2'));assert.ok(maps.has('otra-app'));
+  assert.ok(maps.has(prefix+'0.11.0'));assert.ok(maps.has('otra-app'));
   for(const file of ['index.html','mi_progreso_diario.html','pwa.js','aprendizaje-contenido.js','aprendizaje.js','aprendizaje-progreso.js','aprendizaje-storage.js','aprendizaje-preferencias.js','aprendizaje.css','misiones-contenido.js','misiones-storage.js','misiones.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
 });
 
@@ -276,7 +276,7 @@ test('escenas visuales locales y estilos móviles no requieren recursos externos
 
 
 function startCore(app){
-  for(const name of ['inicio','habitos','podcasts','aprendizaje']){
+  for(const name of ['inicio','habitos','podcasts','aprendizaje','comunidad']){
     const view=app.document.getElementById(name);view.classList.add('app-view');view.hidden=name!=='inicio';
     app.document.getElementById(name+'Title');
     const nav=app.document.createElement('button');nav.classList.add('nav-button');nav.dataset.view=name;nav.removeAttribute=key=>{delete nav.attributes[key];};
@@ -477,12 +477,12 @@ test('Misión enlaza desde Inicio y la lección, con etiquetas accesibles y sin 
   const before=app.model();await launch.fire('click');assert.equal(app.document.getElementById('mission-detective').hidden,false);await missionButton(app,'← Volver').fire('click');assert.equal(app.document.activeElement,launch);
   assert.equal(app.model().saved,before.saved);assert.equal(app.model().badges.filter(n=>n.earned).length,before.badges.filter(n=>n.earned).length);
   for(const id of ['observation','investigation','reflection'])assert.ok(app.elements.some(n=>n.tag==='label'&&n.htmlFor===missionInput(app,id).id));
-  assert.equal([...read('mi_progreso_diario.html').matchAll(/class="nav-button"/g)].length,4);
+  assert.equal([...read('mi_progreso_diario.html').matchAll(/class="nav-button"/g)].length,5);
   assert.ok(read('aprendizaje.css').includes('.mission-view'));assert.ok(read('pwa.js').includes('window.MPDMission?.hasUnsavedChanges()'));
 });
 
-test('publicación v0.10.2: todos los recursos de ejecución están incluidos en caché',()=>{
-  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.10.2'));assert.ok(sw.includes('const VERSION = "0.10.2"'));
+test('publicación v0.11.0: todos los recursos de ejecución están incluidos en caché',()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.11.0'));assert.ok(sw.includes('const VERSION = "0.11.0"'));
   const files=[...sw.matchAll(/"\.\/([^"\n]+)"/g)].map(m=>m[1]);
   for(const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)){assert.ok(files.includes(match[1]),match[1]);assert.ok(fs.existsSync(path.join(ROOT,match[1])));}
   for(const file of ['misiones-contenido.js','misiones-storage.js','misiones.js'])assert.ok(files.includes(file));
@@ -550,4 +550,33 @@ test('misión móvil: títulos sin icono usan todo el ancho y no se parten dentr
   assert.ok(patch.includes('.mission-view .learning-story-card { grid-template-columns:minmax(0,1fr); }'));
   assert.ok(patch.includes('grid-column:1 / -1'));assert.ok(patch.includes('overflow-wrap:normal; word-break:normal; hyphens:none;'));
   assert.ok(!patch.includes('font-size:'));assert.ok(!patch.includes('overflow:hidden'));
+});
+
+test('Comunidad filtra sin acentos, abre y cierra perfiles, valida enlaces y no escribe datos',async()=>{
+  const app=makeApp(memory(),{core:true,render:false});
+  const dialog=app.document.getElementById('communityProfile');
+  dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;dialog.fire('close');};
+  vm.runInContext(read('comunidad-datos.js'),app.context);
+  app.window.MPDCommunityProfiles[0].links.push({label:'Inseguro',url:'javascript:alert(1)'});
+  vm.runInContext(read('comunidad.js'),app.context);
+  const search=app.document.getElementById('communitySearch'),grid=app.document.getElementById('communityGrid');
+  assert.equal(grid.children.length,4);
+  search.value='tecnologia';await search.fire('input');assert.equal(grid.children.length,1);assert.ok(grid.textContent.includes('Nico'));
+  search.value='sin coincidencias';await search.fire('input');assert.equal(grid.children.length,0);assert.equal(app.document.getElementById('communityEmpty').hidden,false);
+  search.value='';await search.fire('input');const button=grid.children[0].querySelectorAll('button')[0];await button.fire('click');
+  assert.equal(dialog.open,true);assert.equal(app.document.activeElement.id,'communityClose');
+  const links=app.document.getElementById('communityDetail').querySelectorAll('a');assert.equal(links.length,1);assert.equal(links[0].rel,'noopener noreferrer');assert.ok(links[0].href.startsWith('https://example.com/'));
+  await app.document.getElementById('communityClose').fire('click');assert.equal(dialog.open,false);assert.equal(app.document.activeElement,button);assert.equal(app.mem.writes.length,0);
+});
+
+test('las cinco pestañas alternan visibilidad y foco sin perder hábitos o aprendizaje',async()=>{
+  const mem=memory();mem.values.set(DATA,JSON.stringify(fixture()));
+  const app=makeApp(mem,{core:true,render:false});await startCore(app);
+  const before=mem.values.get(DATA);
+  for(const name of ['comunidad','habitos','podcasts','aprendizaje','inicio']){
+    const button=app.elements.find(n=>n.className==='nav-button'&&n.dataset.view===name);await button.fire('click');
+    assert.equal(app.document.getElementById(name).hidden,false);assert.equal(app.document.activeElement.id,name+'Title');
+    assert.equal(app.elements.filter(n=>n.classList.contains('app-view')&&!n.hidden).length,1);
+  }
+  assert.equal(mem.values.get(DATA),before);
 });
