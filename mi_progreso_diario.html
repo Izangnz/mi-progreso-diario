@@ -262,6 +262,8 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <script src="./comunidad-datos.js" defer></script>
   <script src="./perfil-datos.js" defer></script>
   <script src="./comunidad.js" defer></script>
+  <script src="./publicaciones-datos.js" defer></script>
+  <script src="./descubrir.js" defer></script>
   <link rel="stylesheet" href="./perfil.css">
   <script src="./perfil-foto.js" defer></script>
   <script src="./perfil.js" defer></script>
@@ -275,7 +277,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <header class="app-header"><h1>Mi Progreso Diario</h1></header>
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.14.0</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.15.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -351,7 +353,20 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <section id="comunidad" class="app-view" aria-labelledby="comunidadTitle" hidden>
     <p class="eyebrow">Ideas que conectan</p>
     <h2 id="comunidadTitle" class="view-title">Descubrir</h2>
-    <p class="sub">Descubre proyectos, caminos y ganas de aprender.</p>
+    <p class="sub">Ideas para avanzar. Personas con las que conectar.</p>
+    <div class="discover-switch" role="group" aria-label="Secciones de Descubrir">
+      <button type="button" id="discover-feed-button" aria-controls="discover-feed" aria-pressed="true">Para ti</button>
+      <button type="button" id="discover-people-button" aria-controls="discover-people" aria-pressed="false">Personas</button>
+    </div>
+    <section id="discover-feed" aria-labelledby="discoverFeedTitle">
+      <h3 id="discoverFeedTitle">Para ti</h3>
+      <p class="muted">Selección editorial de muestra para empezar. Es la misma para todos: no está personalizada ni contiene noticias o publicaciones de usuarios.</p>
+      <div id="discoverFeed" class="editorial-feed"></div>
+      <p id="discoverFeedEmpty" class="card" role="status" hidden>No hay guías disponibles por ahora. Puedes explorar Personas.</p>
+      <noscript><p>Activa JavaScript para leer las guías editoriales de muestra.</p></noscript>
+    </section>
+    <section id="discover-people" aria-labelledby="discoverPeopleTitle" hidden>
+    <h3 id="discoverPeopleTitle">Personas</h3>
     <p class="community-notice">La comunidad real está en preparación. Guardar tu perfil local no lo publica ni crea una cuenta. Puedes explorar ejemplos ficticios marcados como DEMO.</p>
     <p><button type="button" id="communityDemoToggle" aria-pressed="false">Ver ejemplos DEMO</button></p>
     <label for="communitySearch">Busca por interés, proyecto o ciudad</label>
@@ -360,6 +375,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
     <div id="communityGrid" class="community-grid"></div>
     <p id="communityEmpty" class="card" hidden>Todavía no hay perfiles públicos disponibles.</p>
     <noscript><p>Activa JavaScript para explorar ejemplos ficticios DEMO.</p></noscript>
+    </section>
     <dialog id="communityProfile" aria-labelledby="communityProfileTitle">
       <button type="button" id="communityClose">Cerrar perfil</button>
       <div id="communityDetail"></div>

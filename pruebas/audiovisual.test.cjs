@@ -181,7 +181,7 @@ test('la PWA existente conserva caché y actividad offline; no incluye medios gr
   const events={},scope='https://example.test/app/',prefix='mi-progreso-diario:'+scope+':',maps=new Map([[prefix+'anterior',new Map()],['otra-app',new Map()]]);
   const context=vm.createContext({URL,Request,fetch(){throw Error('Sin red');},caches:{async open(key){if(!maps.has(key))maps.set(key,new Map());const map=maps.get(key);return {async addAll(requests){for(const request of requests){assert.equal(request.cache,'reload');const file=new URL(request.url).pathname.slice('/app/'.length)||'index.html';assert.ok(!/\.(mp4|mp3|webm|wav)$/.test(file));map.set(request.url,fs.readFileSync(path.join(ROOT,file)));}},async match(url){return map.get(url);}};},async keys(){return [...maps.keys()];},async delete(key){return maps.delete(key);}},self:{registration:{scope},addEventListener(type,fn){events[type]=fn;},clients:{async claim(){}}}});
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await pending;events.activate({waitUntil(p){pending=p;}});await pending;
-  assert.ok(maps.has(prefix+'0.14.0'));assert.ok(maps.has('otra-app'));
+  assert.ok(maps.has(prefix+'0.15.0'));assert.ok(maps.has('otra-app'));
   for(const file of ['index.html','mi_progreso_diario.html','pwa.js','perfil.js','perfil-foto.js','comunidad.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
 });
 
@@ -473,8 +473,8 @@ test('código educativo conservado como archivo reversible sin carga en la aplic
   assert.equal([...read('mi_progreso_diario.html').matchAll(/class="nav-button"/g)].length,4);
 });
 
-test('publicación v0.14.0: todos los recursos de ejecución están incluidos en caché',()=>{
-  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.14.0'));assert.ok(sw.includes('const VERSION = "0.14.0"'));
+test('publicación v0.15.0: todos los recursos de ejecución están incluidos en caché',()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.15.0'));assert.ok(sw.includes('const VERSION = "0.15.0"'));
   const files=[...sw.matchAll(/"\.\/([^"\n]+)"/g)].map(m=>m[1]);
   for(const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)){assert.ok(files.includes(match[1]),match[1]);assert.ok(fs.existsSync(path.join(ROOT,match[1])));}
   for(const file of ['perfil.js','perfil-foto.js','comunidad.js'])assert.ok(files.includes(file));
@@ -711,4 +711,55 @@ test('fronteras de datos: las DEMO son copias y el repositorio público no lee e
   assert.ok(data.demo.list()[0].name.includes('DEMO'));
   assert.equal(data.demo.list()[0].links.length,1);
   assert.ok(Object.isFrozen(data.public));
+});
+
+test('Descubrir abre Para ti y alterna Personas sin modificar almacenamiento',async()=>{
+  const app=makeApp(memory(),{core:true,render:false});
+  vm.runInContext(read('publicaciones-datos.js'),app.context);
+  vm.runInContext(read('descubrir.js'),app.context);
+  const $=id=>app.document.getElementById(id);
+  assert.equal($('discover-feed').hidden,false);assert.equal($('discover-people').hidden,true);
+  assert.equal($('discover-feed-button').attributes['aria-pressed'],'true');
+  await $('discover-people-button').fire('click');
+  assert.equal($('discover-feed').hidden,true);assert.equal($('discover-people').hidden,false);
+  assert.equal($('discover-people-button').attributes['aria-pressed'],'true');
+  await $('discover-feed-button').fire('click');
+  assert.equal($('discover-feed').hidden,false);assert.equal($('discover-people').hidden,true);
+  assert.equal($('discoverFeed').children.length,6);assert.equal(app.mem.writes.length,0);
+});
+
+test('feed editorial muestra seis categorías, guías ampliables y texto sin interpretar HTML',()=>{
+  const app=makeApp(memory(),{core:true,render:false});
+  vm.runInContext(read('publicaciones-datos.js'),app.context);
+  const source=app.window.MPDPostData,posts=source.editorial.list();
+  assert.deepEqual(Array.from(posts,p=>p.category),['IA','E-commerce','Marketing','Negocios','Productividad','Experiencias emprendedoras']);
+  assert.equal(new Set(posts.map(p=>p.id)).size,6);
+  posts[0].paragraphs[0]='Cambio';assert.notEqual(source.editorial.list()[0].paragraphs[0],'Cambio');
+  assert.equal(source.public.available,false);assert.equal(source.public.list().length,0);
+  vm.runInContext(read('descubrir.js'),app.context);
+  const feed=app.document.getElementById('discoverFeed');
+  for(const card of feed.children){
+    assert.ok(card.textContent.includes('Editorial de muestra'));
+    assert.equal(card.querySelectorAll('details').length,1);
+    assert.equal(card.querySelectorAll('summary').length,1);
+    assert.ok(card.querySelectorAll('summary')[0].attributes['aria-label'].startsWith('Leer guía: '));
+    assert.ok(card.textContent.includes('Tu siguiente paso:'));
+  }
+  assert.equal(app.document.getElementById('discoverFeedEmpty').hidden,true);
+  app.window.MPDPostData={editorial:{list:()=>[{category:'IA',title:'<img src=x onerror=alert(1)>',description:'Texto',paragraphs:['<script>alert(1)</script>'],action:'Acción'}]}};
+  vm.runInContext(read('descubrir.js'),app.context);
+  assert.equal(feed.querySelectorAll('img,script').length,0);assert.ok(feed.textContent.includes('<img'));
+});
+
+test('feed vacío informa sin recurrir a perfiles y recursos nuevos quedan offline',()=>{
+  const app=makeApp(memory(),{core:true,render:false});
+  app.window.MPDPostData={editorial:{list:()=>[]}};
+  vm.runInContext(read('descubrir.js'),app.context);
+  assert.equal(app.document.getElementById('discoverFeed').children.length,0);
+  assert.equal(app.document.getElementById('discoverFeedEmpty').hidden,false);
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');
+  for(const file of ['publicaciones-datos.js','descubrir.js']){assert.ok(html.includes('./'+file));assert.ok(sw.includes('./'+file));}
+  assert.equal((html.match(/data-view="comunidad"/g)||[]).length,1);
+  assert.ok(html.includes('aria-controls="discover-feed"'));assert.ok(html.includes('aria-controls="discover-people"'));
+  assert.ok(read('comunidad.css').includes('min-height:48px'));
 });
