@@ -1,6 +1,7 @@
 /* Perfil privado local. La fotografía se referencia desde IndexedDB. */
 (() => {
-  const KEY='mi-progreso-perfil-v1';
+  const store=window.MPDProfileData.local;
+  const KEY=store.key;
   const limits={alias:60,avatar:8,bio:300,city:80,occupation:120,interests:200,project:120,learning:500,goal:300};
   const $=id=>document.getElementById(id);
   const inputs=Object.fromEntries([...Object.keys(limits),'links'].map(key=>[key,$('profile-'+key)]));
@@ -59,11 +60,11 @@
     try {
       const data=readForm();if(!data.fields.alias)throw Error('Escribe un nombre visible o alias.');
       const commit=async()=>{
-        if(localStorage.getItem(KEY)!==baseline)throw Error('El perfil cambió en otra ventana. Recarga para recuperarlo; tu borrador sigue aquí.');
+        if(store.readRaw()!==baseline)throw Error('El perfil cambió en otra ventana. Recarga para recuperarlo; tu borrador sigue aquí.');
         if(photoChanged)data.photoId=draftPhoto ? (created=await window.MPDPhoto.put(draftPhoto)) : null;
         // Segunda lectura tras IndexedDB: no sobrescribir cambios durante la espera.
-        if(localStorage.getItem(KEY)!==baseline)throw Error('El perfil cambió en otra ventana; tu borrador sigue aquí.');
-        const raw=JSON.stringify({...data,updatedAt:new Date().toISOString()});localStorage.setItem(KEY,raw);baseline=raw;
+        if(store.readRaw()!==baseline)throw Error('El perfil cambió en otra ventana; tu borrador sigue aquí.');
+        const raw=JSON.stringify({...data,updatedAt:new Date().toISOString()});store.writeRaw(raw);baseline=raw;
       };
       if(navigator.locks?.request)await navigator.locks.request(KEY,commit);else await commit();
       const oldId=saved.photoId;saved=data;if(photoChanged)savedPhoto=draftPhoto;
@@ -77,7 +78,7 @@
   const ready=(async()=>{
     $('profileEdit').disabled=true;
     try {
-      baseline=localStorage.getItem(KEY);
+      baseline=store.readRaw();
       if(baseline!==null){const data=JSON.parse(baseline);
         if(data.version!==1 || data.visibility!=='local' || !data.fields || !Array.isArray(data.links) || data.links.length>5 || (data.photoId!=null && (typeof data.photoId!=='string'||data.photoId.length>100)))throw Error('Formato de perfil no compatible.');
         for(const [key,max] of Object.entries(limits)){const value=data.fields[key]??(key==='occupation'?'':undefined);if(typeof value!=='string'||value.length>max)throw Error('Perfil local inválido.');saved.fields[key]=clean(value,max);}

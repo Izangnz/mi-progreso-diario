@@ -1,6 +1,8 @@
 /* Explorador DEMO: no utiliza almacenamiento, cuentas ni peticiones de red. */
 (() => {
-  const profiles = window.MPDCommunityProfiles || [];
+  const source = window.MPDProfileData;
+  const toggle = document.getElementById('communityDemoToggle');
+  let demo = false;
   const grid = document.getElementById('communityGrid');
   const search = document.getElementById('communitySearch');
   const dialog = document.getElementById('communityProfile');
@@ -41,6 +43,7 @@
     document.getElementById('communityClose').focus();
   }
   function render() {
+    const profiles = demo ? source.demo.list() : source.public.list();
     const query = normalize(search.value.trim());
     const matches = profiles.filter(p => normalize([p.name,p.city,...p.interests,p.description,p.project,p.pitch].join(' ')).includes(query));
     grid.replaceChildren();
@@ -54,8 +57,15 @@
       card.append(button); grid.append(card);
     });
     document.getElementById('communityEmpty').hidden = matches.length !== 0;
-    document.getElementById('communityCount').textContent = `${matches.length} perfiles DEMO`;
+    document.getElementById('communityCount').textContent = demo ? `${matches.length} perfiles DEMO · ficticios` : 'Comunidad en preparación';
+    document.getElementById('communityEmpty').textContent = demo ? 'No hay ejemplos DEMO que coincidan. Prueba otra búsqueda.' : 'Todavía no hay perfiles públicos disponibles. Las cuentas reales aún no están habilitadas.';
   }
+  toggle.addEventListener('click', () => {
+    demo = !demo;
+    toggle.setAttribute('aria-pressed', String(demo));
+    toggle.textContent = demo ? 'Ocultar ejemplos DEMO' : 'Ver ejemplos DEMO';
+    render();
+  });
   search.addEventListener('input', render);
   document.getElementById('communityClose').addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => trigger?.focus());

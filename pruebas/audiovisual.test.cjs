@@ -181,7 +181,7 @@ test('la PWA existente conserva caché y actividad offline; no incluye medios gr
   const events={},scope='https://example.test/app/',prefix='mi-progreso-diario:'+scope+':',maps=new Map([[prefix+'anterior',new Map()],['otra-app',new Map()]]);
   const context=vm.createContext({URL,Request,fetch(){throw Error('Sin red');},caches:{async open(key){if(!maps.has(key))maps.set(key,new Map());const map=maps.get(key);return {async addAll(requests){for(const request of requests){assert.equal(request.cache,'reload');const file=new URL(request.url).pathname.slice('/app/'.length)||'index.html';assert.ok(!/\.(mp4|mp3|webm|wav)$/.test(file));map.set(request.url,fs.readFileSync(path.join(ROOT,file)));}},async match(url){return map.get(url);}};},async keys(){return [...maps.keys()];},async delete(key){return maps.delete(key);}},self:{registration:{scope},addEventListener(type,fn){events[type]=fn;},clients:{async claim(){}}}});
   vm.runInContext(read('sw.js'),context);let pending;events.install({waitUntil(p){pending=p;}});await pending;events.activate({waitUntil(p){pending=p;}});await pending;
-  assert.ok(maps.has(prefix+'0.13.0'));assert.ok(maps.has('otra-app'));
+  assert.ok(maps.has(prefix+'0.14.0'));assert.ok(maps.has('otra-app'));
   for(const file of ['index.html','mi_progreso_diario.html','pwa.js','perfil.js','perfil-foto.js','comunidad.js','manifest.webmanifest','icons/apple-touch-icon.png','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png']){let response;events.fetch({request:new Request(scope+file),respondWith(p){response=p;}});assert.deepEqual(await response,fs.readFileSync(path.join(ROOT,file)));}
 });
 
@@ -473,8 +473,8 @@ test('código educativo conservado como archivo reversible sin carga en la aplic
   assert.equal([...read('mi_progreso_diario.html').matchAll(/class="nav-button"/g)].length,4);
 });
 
-test('publicación v0.13.0: todos los recursos de ejecución están incluidos en caché',()=>{
-  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.13.0'));assert.ok(sw.includes('const VERSION = "0.13.0"'));
+test('publicación v0.14.0: todos los recursos de ejecución están incluidos en caché',()=>{
+  const html=read('mi_progreso_diario.html'),sw=read('sw.js');assert.ok(html.includes('Mi Progreso Diario · v0.14.0'));assert.ok(sw.includes('const VERSION = "0.14.0"'));
   const files=[...sw.matchAll(/"\.\/([^"\n]+)"/g)].map(m=>m[1]);
   for(const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)){assert.ok(files.includes(match[1]),match[1]);assert.ok(fs.existsSync(path.join(ROOT,match[1])));}
   for(const file of ['perfil.js','perfil-foto.js','comunidad.js'])assert.ok(files.includes(file));
@@ -550,8 +550,13 @@ test('Comunidad filtra sin acentos, abre y cierra perfiles, valida enlaces y no 
   dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;dialog.fire('close');};
   vm.runInContext(read('comunidad-datos.js'),app.context);
   app.window.MPDCommunityProfiles[0].links.push({label:'Inseguro',url:'javascript:alert(1)'});
+  vm.runInContext(read('perfil-datos.js'),app.context);
   vm.runInContext(read('comunidad.js'),app.context);
   const search=app.document.getElementById('communitySearch'),grid=app.document.getElementById('communityGrid');
+  assert.equal(grid.children.length,0);
+  assert.equal(app.window.MPDProfileData.public.available,false);
+  assert.throws(()=>app.window.MPDProfileData.public.publish({visibility:'public'}));
+  await app.document.getElementById('communityDemoToggle').fire('click');
   assert.equal(grid.children.length,4);
   search.value='tecnologia';await search.fire('input');assert.equal(grid.children.length,1);assert.ok(grid.textContent.includes('Nico'));
   search.value='sin coincidencias';await search.fire('input');assert.equal(grid.children.length,0);assert.equal(app.document.getElementById('communityEmpty').hidden,false);
@@ -559,6 +564,9 @@ test('Comunidad filtra sin acentos, abre y cierra perfiles, valida enlaces y no 
   assert.equal(dialog.open,true);assert.equal(app.document.activeElement.id,'communityClose');
   const links=app.document.getElementById('communityDetail').querySelectorAll('a');assert.equal(links.length,1);assert.equal(links[0].rel,'noopener noreferrer');assert.ok(links[0].href.startsWith('https://example.com/'));
   await app.document.getElementById('communityClose').fire('click');assert.equal(dialog.open,false);assert.equal(app.document.activeElement,button);assert.equal(app.mem.writes.length,0);
+  await app.document.getElementById('communityDemoToggle').fire('click');
+  assert.equal(grid.children.length,0);
+  assert.equal(app.window.MPDProfileData.public.list().length,0);
 });
 
 test('las cuatro pestañas alternan visibilidad y foco sin perder hábitos o aprendizaje',async()=>{
@@ -580,6 +588,7 @@ function profileApp(raw=null,fail=false,photoSource=null) {
   if(photoSource){class TestURL extends URL {static createObjectURL(){return 'blob:recovered';}static revokeObjectURL(){}}app.context.URL=TestURL;}
   app.window.MPDPhoto={get:async()=>photoSource,put:async()=> 'photo-test',remove:async()=>{},compress:async file=>file};
   app.document.getElementById('profileEditor').hidden=true;
+  vm.runInContext(read('perfil-datos.js'),app.context);
   vm.runInContext(read('perfil.js'),app.context);
   return {...app,lastView:()=>app.lastView,external:value=>{saved=value;},saved:()=>saved,writes:()=>writes,edit:async(key,value)=>{await app.window.MPDProfile.ready;app.document.getElementById('profile-'+key).value=value;await app.document.getElementById('profileForm').fire('input');},save:async()=>{await app.window.MPDProfile.ready;return app.document.getElementById('profileForm').fire('submit',{preventDefault(){}});}};
 }
@@ -688,4 +697,18 @@ test('foto persistida se recupera y volver a Mi perfil muestra tarjeta sin perde
   await app.document.getElementById('profileEdit').fire('click');await app.edit('occupation','Diseño');app.window.MPDProfile.enter();
   assert.equal(app.document.getElementById('profileEditor').hidden,true);assert.equal(app.window.MPDProfile.hasUnsavedChanges(),true);
   await app.document.getElementById('profileEdit').fire('click');assert.equal(app.document.getElementById('profile-occupation').value,'Diseño');
+});
+
+test('fronteras de datos: las DEMO son copias y el repositorio público no lee el perfil privado',()=>{
+  const app=makeApp(memory(),{core:true,render:false});
+  app.context.localStorage={getItem(){throw Error('No debe leer datos privados');},setItem(){throw Error('No debe escribir');}};
+  vm.runInContext(read('comunidad-datos.js'),app.context);
+  vm.runInContext(read('perfil-datos.js'),app.context);
+  const data=app.window.MPDProfileData;
+  assert.equal(data.public.list().length,0);
+  assert.throws(()=>data.public.publish({fields:{alias:'Privado'},photoId:'privada'}));
+  const demo=data.demo.list();demo[0].links.length=0;demo[0].name='Otro';
+  assert.ok(data.demo.list()[0].name.includes('DEMO'));
+  assert.equal(data.demo.list()[0].links.length,1);
+  assert.ok(Object.isFrozen(data.public));
 });
