@@ -262,11 +262,12 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <script src="./comunidad-datos.js" defer></script>
   <script src="./perfil-datos.js" defer></script>
   <script src="./comunidad.js" defer></script>
-  <script src="./publicaciones-datos.js" defer></script>
+
   <script src="./descubrir.js" defer></script>
   <link rel="stylesheet" href="./perfil.css">
   <script src="./perfil-foto.js" defer></script>
   <script src="./perfil.js" defer></script>
+  <link rel="stylesheet" href="./account.css">
 </head>
 <body>
 <main>
@@ -277,7 +278,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <header class="app-header"><h1>Mi Progreso Diario</h1></header>
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.15.0</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.16.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -360,16 +361,26 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
     </div>
     <section id="discover-feed" aria-labelledby="discoverFeedTitle">
       <h3 id="discoverFeedTitle">Para ti</h3>
-      <p class="muted">Selección editorial de muestra para empezar. Es la misma para todos: no está personalizada ni contiene noticias o publicaciones de usuarios.</p>
       <div id="discoverFeed" class="editorial-feed"></div>
-      <p id="discoverFeedEmpty" class="card" role="status" hidden>No hay guías disponibles por ahora. Puedes explorar Personas.</p>
-      <noscript><p>Activa JavaScript para leer las guías editoriales de muestra.</p></noscript>
+      <div id="discoverFeedEmpty" class="card cloud-feed-empty" role="status"><span aria-hidden="true">✦</span><h3>Tu próxima conexión empieza aquí</h3><p>Aquí aparecerán las publicaciones de la comunidad.</p><p class="muted">Mientras tanto, descubre personas que también están construyendo su camino.</p><button type="button" id="cloud-explorePeople">Explorar Personas</button></div>
     </section>
     <section id="discover-people" aria-labelledby="discoverPeopleTitle" hidden>
     <h3 id="discoverPeopleTitle">Personas</h3>
-    <p class="community-notice">La comunidad real está en preparación. Guardar tu perfil local no lo publica ni crea una cuenta. Puedes explorar ejemplos ficticios marcados como DEMO.</p>
+  <section class="card">
+    <h2>Encuentra a tu próxima conexión</h2>
+    <form id="cloud-findProfile" class="account-form" novalidate>
+      <label>Alias<input id="cloud-findAlias" autocapitalize="none" spellcheck="false" aria-describedby="cloud-searchHint cloud-publicProfileText" minlength="3" maxlength="30" required autocomplete="off"></label>
+      <button type="submit">Buscar perfil</button>
+    </form>
+    <p class="muted"><span id="cloud-searchHint">Escribe al menos 3 caracteres del alias. Si la búsqueda parcial aún no está habilitada, se consultará únicamente el alias exacto.</span></p>
+  </section>
+  <section class="card" id="cloud-publicProfile" hidden>
+    <h2>Resultados reales</h2><p id="cloud-publicProfileText" role="status" aria-live="polite"></p><div id="cloud-publicResults" class="cloud-people-list"></div>
+  </section>
+
+    <p class="community-notice">La búsqueda por alias consulta perfiles reales publicados. Los ejemplos DEMO de abajo son ficticios y están separados de los resultados reales.</p>
     <p><button type="button" id="communityDemoToggle" aria-pressed="false">Ver ejemplos DEMO</button></p>
-    <label for="communitySearch">Busca por interés, proyecto o ciudad</label>
+    <label for="communitySearch">Filtrar ejemplos DEMO por interés, proyecto o ciudad</label>
     <input type="search" id="communitySearch" placeholder="Prueba: diseño, Valencia…" autocomplete="off">
     <p id="communityCount" class="muted" role="status" aria-live="polite"></p>
     <div id="communityGrid" class="community-grid"></div>
@@ -385,14 +396,27 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
     <p class="eyebrow">Tu espacio</p><h2 id="perfilTitle" class="view-title">Mi perfil</h2>
     <p class="community-notice">Perfil local y privado en este navegador. No se publica en Descubrir ni crea una cuenta. Borrar los datos del navegador puede eliminarlo.</p>
     <div id="profileDisplay">
-      <section class="card profile-preview" aria-label="Tu perfil privado"><div id="profilePreview"></div><button type="button" id="profileEdit">Editar perfil</button><p id="profileDisplayStatus" role="status" aria-live="polite"></p></section>
+      <button type="button" id="cloud-openSettings" class="secondary-action cloud-settings-link">Configuración</button>
+      <section class="card profile-preview" aria-label="Tu perfil privado"><div id="profilePreview"></div><p id="cloud-profileSummary" class="muted">Sin alias público vinculado.</p><button type="button" id="profileEdit">Editar perfil</button><p id="profileDisplayStatus" role="status" aria-live="polite"></p></section>
     </div>
     <div id="profileEditor" hidden>
       <h3 id="profileEditorTitle" tabindex="-1">Editar perfil</h3>
       <form id="profileForm" class="card" aria-label="Editar mi perfil">
         <div class="profile-field"><label for="profilePhoto">Fotografía privada (opcional)</label><input type="file" id="profilePhoto" accept="image/jpeg,image/png,image/webp"><p class="muted">JPEG, PNG o WebP, hasta 10 MB. Se comprime y guarda solo en este dispositivo.</p><div id="profilePhotoPreview" aria-live="polite"></div><button type="button" id="profilePhotoRemove" class="secondary-action">Eliminar fotografía</button></div>
-<div class="profile-field"><label for="profile-alias">Nombre visible o alias</label><input type="text" id="profile-alias" name="alias" maxlength="60" required></div>
+<div class="profile-field"><label for="profile-alias">Nombre visible</label><input type="text" id="profile-alias" name="alias" maxlength="60" required></div>
 <div class="profile-field"><label for="profile-avatar">Avatar opcional (iniciales o emoji)</label><input type="text" id="profile-avatar" name="avatar" maxlength="8"></div>
+<fieldset id="cloud-privacy" class="cloud-privacy" disabled aria-describedby="cloud-privacyHelp cloud-privacyStatus">
+ <legend>Visibilidad de tu cuenta</legend>
+ <div class="cloud-privacy-track" id="cloud-privacyTrack" data-public="false">
+  <span class="cloud-privacy-thumb" aria-hidden="true"></span>
+  <input type="radio" name="cloud-visibility" id="cloud-visibilityPublic" value="public"><label for="cloud-visibilityPublic">Pública</label>
+  <input type="radio" name="cloud-visibility" id="cloud-visibilityPrivate" value="private" checked><label for="cloud-visibilityPrivate">Privada</label>
+ </div>
+ <input id="cloud-publishProfile" type="checkbox" hidden>
+ <p id="cloud-privacyHelp">Privada: tu perfil no aparece en las búsquedas públicas.</p>
+</fieldset>
+<p id="cloud-privacyStatus" class="muted" role="status" aria-live="polite">Inicia sesión para gestionar tu visibilidad. Tus datos locales siguen disponibles.</p>
+
 <div class="profile-field"><label for="profile-bio">Breve descripción</label><textarea id="profile-bio" name="bio" maxlength="300" rows="3"></textarea></div>
 <div class="profile-field"><label for="profile-city">Ciudad aproximada (opcional)</label><input type="text" id="profile-city" name="city" maxlength="80"></div>
 <div class="profile-field"><label for="profile-occupation">Ocupación o actividad profesional</label><input type="text" id="profile-occupation" name="occupation" maxlength="120"></div>
@@ -403,10 +427,37 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
         <div class="profile-field"><label for="profile-links">Enlaces públicos voluntarios</label><textarea id="profile-links" name="links" maxlength="2000" rows="4" placeholder="https://… (uno por línea, hasta 5)" aria-describedby="profileLinksHint"></textarea><p class="muted" id="profileLinksHint">Instagram, YouTube, X, LinkedIn o tu proyecto. Solo direcciones HTTPS completas, sin credenciales.</p></div>
         <p id="profileStatus" role="status" aria-live="polite"></p><div class="profile-actions"><button type="submit" id="profileSave">Guardar cambios</button><button type="button" id="profileCancel" class="secondary-action">Cancelar sin guardar</button></div>
       </form>
+    <form id="cloud-profileForm" class="account-form card" novalidate hidden>
+      <h3>Perfil público opcional</h3>
+      <p id="cloud-aliasHint" class="muted">De 3 a 30 caracteres: letras minúsculas, números y guion bajo (_). Ejemplo: ana_2026.</p>
+      <label>Alias público<input aria-describedby="cloud-aliasHint cloud-editorStatus" autocapitalize="none" spellcheck="false" id="cloud-profileAlias" type="text" minlength="3" maxlength="30" required autocomplete="off"></label>
+      <input id="cloud-displayName" type="hidden">
+      <p class="muted">Al guardar la visibilidad se enviarán únicamente el alias y el nombre visible escrito arriba. La foto y el resto de tu información siguen en este dispositivo.</p>
+
+      <p class="muted">Tu perfil es privado por defecto. Desmarca la opción y guarda para ocultarlo. Nunca se publican tu email, hábitos, historial ni estadísticas.</p>
+      <p id="cloud-editorStatus" role="status" aria-live="polite"></p>
+      <button type="submit" disabled>Guardar perfil y visibilidad</button>
+      <a id="cloud-publicLink" hidden>Ver perfil público</a>
+    </form>
+    <p id="cloud-editorGuest" class="muted">Para gestionar tu alias público, inicia sesión desde Configuración.</p>
     </div>
     <noscript>Activa JavaScript para editar tu perfil local.</noscript>
+
+
   </section>
-  <p class="footer">Tus datos se guardan solo en este navegador y dispositivo. No se envían a ningún servidor. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
+  <section id="public-person" class="app-view" aria-labelledby="public-personTitle" hidden><button type="button" id="cloud-backPerson">← Volver a Personas</button><h2 id="public-personTitle" tabindex="-1">Perfil público</h2><div id="cloud-personContent" class="card" aria-live="polite"></div></section>
+  <section id="settings" class="app-view" hidden aria-labelledby="settingsTitle">
+    <button type="button" id="cloud-backSettings" class="secondary-action">← Mi perfil</button>
+    <h2 id="settingsTitle" tabindex="-1">Configuración</h2>
+  <section class="card" id="cloud-account">
+    <h2>Cuenta y seguridad</h2>
+    <p id="cloud-sessionLabel">Sin cuenta: puedes seguir usando tus hábitos.</p>
+    <p id="cloud-accountStatus" class="account-status muted" role="status">Preparando cuenta opcional…</p>
+    <button type="button" id="cloud-openAuth" class="cloud-primary">Iniciar sesión o crear cuenta</button>
+    <button type="button" id="cloud-signout" hidden disabled>Cerrar sesión</button>
+  </section>
+  </section>
+  <p class="footer">Tus hábitos, fotografía y perfil privado se guardan solo en este navegador y dispositivo. La cuenta opcional y el alias público se gestionan en Supabase. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
 </main>
 <nav class="bottom-nav" aria-label="Navegación principal">
   <div class="nav-items">
@@ -754,5 +805,29 @@ felicitacion.hidden = !(
   refresh();
 
 </script>
+<dialog id="cloud-authDialog" class="cloud-auth" aria-labelledby="cloud-authTitle">
+  <div class="cloud-auth-shell">
+    <header class="cloud-auth-nav"><button type="button" id="cloud-backAuth" class="cloud-text">← Mi perfil</button><button type="button" id="cloud-closeAuth" class="cloud-close" aria-label="Cerrar acceso">×</button></header>
+    <div class="cloud-auth-brand" aria-hidden="true">P<span>✦</span></div>
+    <p class="cloud-eyebrow">PROGRESSMATE</p>
+    <h2 id="cloud-authTitle" tabindex="-1">Qué bueno verte</h2>
+    <p id="cloud-authIntro" class="cloud-auth-intro">Un pequeño paso hoy. Tu progreso continúa.</p>
+    <p id="cloud-authStatus" class="account-status" role="status" aria-live="polite"></p>
+    <form id="cloud-credentials" class="account-form">
+      <label>Correo electrónico<input id="cloud-email" type="email" autocomplete="email" required maxlength="254"></label>
+      <label>Contraseña<input id="cloud-password" type="password" autocomplete="current-password" required></label>
+      <button type="button" id="cloud-forgot" class="cloud-text">¿Has olvidado tu contraseña?</button>
+      <button type="submit" id="cloud-authSubmit" class="cloud-primary" disabled>Iniciar sesión</button>
+      <p class="cloud-switch"><span id="cloud-switchPrompt">¿No tienes cuenta?</span> <button type="button" id="cloud-switchAuth" class="cloud-text">Regístrate</button></p>
+    </form>
+    <form id="cloud-recoveryForm" class="account-form" hidden>
+      <label>Nueva contraseña<input id="cloud-newPassword" type="password" autocomplete="new-password" minlength="8" required></label>
+      <button type="submit" disabled>Guardar contraseña</button>
+    </form>
+    <p class="cloud-auth-note">Tus hábitos y fotografías siguen guardados en este dispositivo. Tú decides si publicas tu alias.</p>
+  </div>
+</dialog>
+<script src="./supabase-config.public.js"></script>
+<script src="./account.js"></script>
 </body>
 </html>

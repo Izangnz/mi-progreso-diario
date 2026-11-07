@@ -42,7 +42,7 @@
     const photo=$('profilePhotoPreview');photo.replaceChildren();avatar(saved,photoChanged?draftPhoto:savedPhoto,photo);
   }
   function editor(open){$('profileDisplay').hidden=open;$('profileEditor').hidden=!open;$(open?'profileEditorTitle':'profileEdit').focus();}
-  function busyControls(value){busy=value;document.querySelectorAll('#profileForm input, #profileForm textarea, #profileForm button').forEach(el=>{el.disabled=value;});$('profileSave').disabled=value||blocked;}
+  function busyControls(value){busy=value;document.querySelectorAll('#profileForm input, #profileForm textarea, #profileForm button, #cloud-profileForm button').forEach(el=>{el.disabled=value;});$('profileSave').disabled=value||blocked;}
   $('profileEdit').addEventListener('click',()=>{if(!dirty){fill();photoChanged=false;draftPhoto=null;render();}status.textContent=blocked?'No se puede leer el perfil guardado; se conserva intacto.':'Los cambios se guardan solo al pulsar Guardar cambios.';editor(true);});
   $('profileCancel').addEventListener('click',()=>{if(busy)return;sequence++;processing=false;dirty=false;photoChanged=false;draftPhoto=null;$('profilePhoto').value='';fill();render();editor(false);});
   $('profileForm').addEventListener('input',()=>{dirty=true;status.textContent='Cambios sin guardar.';});
@@ -68,7 +68,11 @@
       };
       if(navigator.locks?.request)await navigator.locks.request(KEY,commit);else await commit();
       const oldId=saved.photoId;saved=data;if(photoChanged)savedPhoto=draftPhoto;
-      dirty=false;photoChanged=false;draftPhoto=null;render();editor(false);displayStatus.textContent='Perfil guardado en este dispositivo. No se ha publicado.';
+      dirty=false;photoChanged=false;draftPhoto=null;render();
+      let cloudSaved=false;
+      try {cloudSaved=await window.MPDCloudPrivacy?.save() || false;}
+      catch(error) {dirty=true;status.textContent='Datos locales guardados; privacidad NO confirmada en Supabase. '+error.message;return;}
+      editor(false);displayStatus.textContent=cloudSaved ? 'Perfil local guardado. '+document.getElementById('cloud-privacyStatus').textContent : 'Perfil guardado en este dispositivo. No se ha publicado.';
       if(oldId && oldId!==data.photoId)window.MPDPhoto.remove(oldId).catch(()=>{});
     } catch(error){if(created)await window.MPDPhoto.remove(created).catch(()=>{});dirty=true;status.textContent='No se ha guardado. '+error.message;}
     finally{busyControls(false);}

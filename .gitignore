@@ -1,0 +1,6 @@
+.DS_Store
+.env
+.env.*
+supabase-config.local.js
+Docker.app/
+.local-diagnostics/
