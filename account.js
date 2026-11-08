@@ -2,19 +2,26 @@
 (async () => {
   const $ = id => document.getElementById(id);
   const status = message => { $('cloud-accountStatus').textContent = message; $('cloud-authStatus').textContent = message; $('cloud-editorStatus').textContent = message; };
-  let client, user, recovery = false, revision = 0, sessionSequence=0;
+  let client, user, recovery = false, revision = 0, sessionSequence=0, authTimedOut=window.MPDWelcome?.state()==='error';
   const storage=window.MPDUserStorage;
+  window.addEventListener('mpd-auth-timeout',()=>{
+    authTimedOut=true;sessionSequence++;storage.activate(null).catch(()=>{});
+  });
+  function authFailure(error){
+    if(error?.status===401 || error?.status===403)window.MPDWelcome?.session(null);
+    else window.MPDWelcome?.fail();
+  }
   async function bindSession(session, token=++sessionSequence){
     if(token!==sessionSequence)return false;
     await storage.activate(null);
     if(!session?.user){await storage.remember(null);return token===sessionSequence;}
     const isBlocked=await storage.blocked(session.user.id);
     if(token!==sessionSequence)return false;
-    if(isBlocked){status('Sesión cerrada localmente. Inicia sesión de nuevo para acceder a tus datos.');return false;}
+    if(isBlocked){window.MPDWelcome?.session(null);status('Sesión cerrada localmente. Inicia sesión de nuevo para acceder a tus datos.');return false;}
     const {data,error}=await client.auth.getUser();
     if(token!==sessionSequence)return false;
     if(error?.status>=400 && error?.status<500)await storage.remember(null);
-    if(error || data?.user?.id!==session.user.id)throw Error('No se ha validado la cuenta online.');
+    if(error || data?.user?.id!==session.user.id){if(error)throw error;throw {status:401};}
     await storage.remember(data.user.id);
     if(token!==sessionSequence)return false;
     await storage.activate(data.user.id);return token===sessionSequence;
@@ -172,7 +179,7 @@
     const label = $('cloud-authSubmit').textContent;
     $('cloud-authSubmit').textContent = 'Un momento…';
     buttons.forEach(button => {button.disabled = true;});
-    try { await task(); } catch { status('No se pudo completar la operación. Comprueba tu conexión e inténtalo de nuevo.'); }
+    try { await task(); } catch(error) { if(window.MPDWelcome?.state()==='checking')authFailure(error);status('No se pudo completar la operación. Comprueba tu conexión e inténtalo de nuevo.'); }
     finally { busy = false; dialog.setAttribute('aria-busy','false'); $('cloud-authSubmit').textContent = label; buttons.forEach(button => {button.disabled = !client;}); }
   }
   function report(error, success) {
@@ -187,6 +194,8 @@
   }
   $('cloud-credentials').addEventListener('submit', event => {
     event.preventDefault();
+    if(!client){window.MPDWelcome?.fail();status('Cuenta no disponible. Comprueba la conexión y reintenta.');return;}
+    authTimedOut=false;window.MPDWelcome?.checking();
     perform(async () => {
       const email = $('cloud-email').value.trim(), password = $('cloud-password').value;
       const signup = authMode === 'signup';
@@ -194,6 +203,7 @@
         await client.auth.signInWithPassword({email,password});
       $('cloud-password').value = '';
       if(!result.error && result.data?.session){await storage.allowLogin();if(await bindSession(result.data.session))await refresh(result.data.session);}
+      if(result.error || !result.data?.session)window.MPDWelcome?.session(null);
       report(result.error, signup ? 'Si el registro requiere confirmación, revisa tu email y abre el enlace. Si ya tienes cuenta, inicia sesión.' : 'Sesión iniciada.');
     });
   });
@@ -232,6 +242,7 @@
     if (client && publicAlias) await window.MPDPublicPeople.open(publicAlias);
   }
   try {
+    if(authTimedOut)return;
     const config = window.MPD_SUPABASE;
     if (!config?.url || !config?.publishableKey || config.url.includes('TU-PROYECTO')) throw Error('config');
     const url = new URL(config.url);
@@ -240,11 +251,13 @@
     // El SDK en caché no debe invalidar el marcador offline sin poder validar online.
     if(navigator.onLine===false)throw Error('offline');
     const {createClient} = await import('https://esm.sh/@supabase/supabase-js@2.49.1');
+    if(authTimedOut)return;
     recovery = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
     client = createClient(config.url, config.publishableKey, {auth:{storageKey:'mpd-auth-v1',flowType:'implicit',detectSessionInUrl:true}});
     window.MPDPublicPeople.connect(client);
     window.MPDHabitSync.connect(client);
     client.auth.onAuthStateChange((event, session) => {
+      if(authTimedOut)return;
       if (event === 'PASSWORD_RECOVERY') recovery = true;
       if (event === 'SIGNED_OUT') recovery = false;
       // No esperar llamadas de Auth dentro del callback del SDK.
@@ -254,15 +267,16 @@
         setTimeout(async()=>{try{
           const result=await client.auth.getUser();
           if(token!==sessionSequence || accountEpoch!==storage.epoch())return;
+          if(result.error && result.error.status!==401 && result.error.status!==403){status('No se pudo renovar la validación online. Tus cambios siguen en este dispositivo.');return;}
           if(result.error || result.data?.user?.id!==storage.owner()){
-            await storage.activate(null);await storage.remember(null);return;
+            await storage.activate(null);await storage.remember(null);authFailure(result.error||{status:401});return;
           }
           await storage.remember(result.data.user.id);
         }catch{if(token===sessionSequence)status('No se pudo renovar la validación online. Los cambios siguen guardados en este dispositivo.');}},0);
         return;
       }
       storage.activate(null).catch(()=>{});
-      setTimeout(async()=>{try{if(await bindSession(session,token))await refresh(session);}catch{if(token===sessionSequence)status('No se ha validado la sesión. Datos personales ocultos.');}},0);
+      setTimeout(async()=>{try{if(await bindSession(session,token))await refresh(session);}catch(error){if(token===sessionSequence){authFailure(error);status('No se ha validado la sesión. Datos personales ocultos.');}}},0);
     });
     const initialSequence=sessionSequence;
     const {data,error} = await client.auth.getSession();
@@ -273,14 +287,18 @@
     if (location.hash) history.replaceState(null,'',location.pathname+location.search);
     await loadPublic().catch(()=>status('No se pudo consultar el perfil público. Comprueba tu conexión.'));
 
-  } catch {
+  } catch (error) {
+    if(authTimedOut)return;
     client = null;
     [...$('cloud-profileForm').querySelectorAll('button'), ...$('cloud-account').querySelectorAll('button'), ...dialog.querySelectorAll('button')].filter(button => !['cloud-openAuth','cloud-closeAuth','cloud-backAuth','cloud-switchAuth'].includes(button.id)).forEach(button => {button.disabled=true;});
     const restored=navigator.onLine===false && await storage.restoreOffline().catch(()=>false);
+    if(authTimedOut){await storage.activate(null).catch(()=>{});return;}
     if(!restored)await storage.activate(null).catch(()=>{});
     $('cloud-signout').hidden=!restored;$('cloud-signout').disabled=!restored;
     status(restored?'Acceso local offline previamente validado (máximo 7 días). Sin sincronización Cloud.':'Sin cuenta validada disponible. Puedes explorar y probar hábitos temporales.');
-    window.MPDWelcome?.session(storage.owner());
+    if(restored)window.MPDWelcome?.session(storage.owner());
+    else if(navigator.onLine===false)window.MPDWelcome?.session(null);
+    else authFailure(error);
     if (publicAlias) {$('cloud-publicProfile').hidden=false;$('cloud-publicProfileText').textContent='Para consultar un perfil necesitas conexión y configurar Supabase.';}
   }
 })();

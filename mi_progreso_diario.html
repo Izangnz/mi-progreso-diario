@@ -273,6 +273,17 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <link rel="stylesheet" href="./account.css">
 </head>
 <body>
+<section id="auth-boot" class="auth-boot" aria-label="Inicio de ProgressMate">
+ <div class="welcome-brand"><span class="welcome-mark" aria-hidden="true">↗</span> ProgressMate</div>
+ <span id="auth-boot-spinner" class="auth-boot-spinner" aria-hidden="true"></span>
+ <p id="auth-boot-status" role="status" aria-live="polite">Comprobando sesión…</p>
+ <div id="auth-boot-actions" class="welcome-actions" hidden>
+  <button id="auth-boot-retry" type="button">Reintentar</button>
+  <button id="auth-boot-guest" type="button" class="welcome-secondary">Continuar sin cuenta</button>
+  <button id="auth-boot-legacy" type="button" class="welcome-guest">Consultar mis datos anteriores</button>
+ </div>
+ <noscript>Activa JavaScript para comprobar tu sesión y abrir ProgressMate.</noscript>
+</section>
 <section id="welcome-panel" class="welcome" aria-labelledby="welcome-title" hidden>
  <div class="welcome-brand"><span class="welcome-mark" aria-hidden="true">↗</span> ProgressMate</div>
  <div class="welcome-content">
@@ -284,7 +295,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
  <p class="welcome-note">Los datos anteriores siguen en este dispositivo. Puedes consultarlos y exportarlos antes de decidir si los incorporas a una cuenta.</p>
  </div><p class="welcome-footer">HÁBITOS · DISCIPLINA · PROPÓSITO</p>
 </section>
-<div id="application-shell">
+<div id="application-shell" hidden>
 <aside id="sync-panel" class="card" aria-label="Sincronización de hábitos">
  <p id="sync-status" role="status" aria-live="polite">Guardado en este dispositivo. Inicia sesión para sincronizar.</p>
  <button id="sync-retry" type="button">Sincronizar ahora</button>
@@ -300,7 +311,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <header class="app-header"><h1>Mi Progreso Diario</h1></header>
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.17.1</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.17.2</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -837,9 +848,9 @@ felicitacion.hidden = !(
  <p id="legacy-status" role="status"></p><div id="legacy-content"></div>
  <button id="legacy-export" type="button">Exportar respaldo</button><button id="legacy-close" type="button">Volver</button>
 </dialog>
-<script src="./supabase-config.public.js"></script>
 <script src="./welcome.js"></script>
 <script src="./legacy-access.js"></script>
+<script src="./supabase-config.public.js"></script>
 <script src="./account.js"></script>
 </body>
 </html>
