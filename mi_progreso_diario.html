@@ -300,7 +300,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <header class="app-header"><h1>Mi Progreso Diario</h1></header>
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.17.0</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.17.1</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -417,18 +417,6 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <section id="perfil" class="app-view" aria-labelledby="perfilTitle" hidden>
     <p class="eyebrow">Tu espacio</p><h2 id="perfilTitle" class="view-title">Mi perfil</h2>
     <p class="community-notice">Perfil local y privado en este navegador. No se publica en Descubrir ni crea una cuenta. Borrar los datos del navegador puede eliminarlo.</p>
-    <p><button id="profile-legacy" type="button" class="secondary-action">Consultar datos anteriores de este dispositivo</button></p>
-    <section class="card" id="migration-panel" hidden>
-      <h3>Datos anteriores de este dispositivo</h3>
-      <p>Este dispositivo contiene hábitos anteriores. ¿Quieres incorporarlos a esta cuenta?</p>
-      <p id="migration-summary" role="status"></p>
-      <button id="migration-backup" type="button">Exportar respaldo</button>
-      <label><input id="migration-consent" type="checkbox">Confirmo que estos datos me pertenecen y quiero incorporarlos a la cuenta iniciada.</label>
-      <button id="migration-import" type="button" disabled>Incorporar sin reemplazar datos</button>
-      <p id="migration-result" role="status" aria-live="polite"></p>
-    </section>
-    <p class="muted">Los datos de cada cuenta permanecen en este dispositivo. La sincronización entre dispositivos está desactivada. Sin sesión puedes explorar y probar hábitos temporales.</p>
-    <button id="migration-archives" type="button">Exportar archivos de importación de mi cuenta</button>
     <div id="profileDisplay">
       <button type="button" id="cloud-openSettings" class="secondary-action cloud-settings-link">Configuración</button>
       <section class="card profile-preview" aria-label="Tu perfil privado"><div id="profilePreview"></div><p id="cloud-profileSummary" class="muted">Sin alias público vinculado.</p><button type="button" id="profileEdit">Editar perfil</button><p id="profileDisplayStatus" role="status" aria-live="polite"></p></section>
@@ -483,6 +471,24 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <section id="settings" class="app-view" hidden aria-labelledby="settingsTitle">
     <button type="button" id="cloud-backSettings" class="secondary-action">← Mi perfil</button>
     <h2 id="settingsTitle" tabindex="-1">Configuración</h2>
+  <section id="legacy-settings" class="card legacy-settings" hidden aria-labelledby="legacy-settings-title">
+    <h3 id="legacy-settings-title">Datos de este dispositivo</h3>
+    <p id="migration-notice" class="muted" role="status" hidden></p>
+    <button id="migration-open" type="button" class="secondary-action" hidden>Revisar datos pendientes</button>
+    <details id="legacy-tools"><summary>Consultar o exportar datos anteriores</summary>
+      <p class="muted">Consulta de solo lectura. Los originales se conservan aunque ya se hayan incorporado a una cuenta.</p>
+      <button id="profile-legacy" type="button" class="secondary-action">Consultar datos anteriores de este dispositivo</button>
+      <button id="migration-archives" type="button" class="secondary-action">Exportar archivos de importación de mi cuenta</button>
+    </details>
+    <section id="migration-panel" hidden aria-labelledby="migration-title">
+      <h3 id="migration-title">Revisar importación</h3>
+      <p id="migration-summary" role="status"></p>
+      <button id="migration-backup" type="button">Exportar respaldo</button>
+      <label class="migration-consent"><input id="migration-consent" type="checkbox">Confirmo que estos datos me pertenecen y quiero incorporarlos a la cuenta iniciada.</label>
+      <button id="migration-import" type="button" disabled>Incorporar sin reemplazar datos</button>
+    </section>
+    <p id="migration-result" class="muted" role="status" aria-live="polite"></p>
+  </section>
   <section class="card" id="cloud-account">
     <h2>Cuenta y seguridad</h2>
     <p id="cloud-sessionLabel">Sin cuenta: puedes seguir usando tus hábitos.</p>

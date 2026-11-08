@@ -75,6 +75,19 @@
     const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({habitsRaw,privateRaw,photoBytes}))))).map(v=>v.toString(16).padStart(2,'0')).join('');
     return {data,profile,blob,fingerprint,habitsRaw,privateRaw};
   }
+  // Solo lectura: cruza la huella de origen con el registro y los datos de esta cuenta.
+  async function legacyImportStatus(snapshot){
+    const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión para revisar la importación.');
+    if(!snapshot || !/^[a-f0-9]{64}$/.test(snapshot.fingerprint))throw Error('Origen de importación inválido.');
+    const result=await transaction(['records','imports'],'readonly',(tx,done)=>{
+      const receipt=tx.objectStore('imports').get(snapshot.fingerprint),habits=tx.objectStore('records').get(key(uid,'habits'));
+      let count=0;const finish=()=>{if(++count!==2)return;same(token);
+        if(receipt.result && receipt.result.owner!==uid){done({status:'other'});return;}
+        const hasData=!!habits.result?.importedLegacyHashes?.includes(snapshot.fingerprint),hasReceipt=receipt.result?.owner===uid;
+        done({status:hasData?'completed':hasReceipt?'recorded':'pending',owner:uid,hasData,hasReceipt});
+      };receipt.onsuccess=habits.onsuccess=finish;
+    });same(token);return result;
+  }
   async function importLegacy(snapshot,confirmed){if(!confirmed)throw Error('Confirma explícitamente la importación.');const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión antes de importar.');const fresh=await legacy();same(token);if(!fresh||fresh.fingerprint!==snapshot.fingerprint)throw Error('Los datos anteriores cambiaron. Revisa de nuevo el resumen.');
     const stamp=new Date().toISOString(),mapping=new Map();const mapId=id=>{const k=typeof id+':'+id;if(!mapping.has(k))mapping.set(k,crypto.randomUUID());return mapping.get(k);};const imported=structuredClone(fresh.data);imported.habits=imported.habits.map(h=>({...h,id:mapId(h.id)}));for(const record of Object.values(imported.history))record.habits=record.habits.map(h=>({...h,id:mapId(h.id)}));
     const result=await transaction(stores,'readwrite',(tx,done)=>{const records=tx.objectStore('records'),ledger=tx.objectStore('imports');const check=ledger.get(fresh.fingerprint);check.onsuccess=()=>{if(token!==epoch){tx.abort();return;}if(check.result){done(check.result.owner===uid?'already':'other');return;}
@@ -91,5 +104,5 @@
   async function blocked(uid){return transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').get('__blocked');r.onsuccess=()=>done(r.result===uid);});}
   async function allowLogin(){await transaction(['records'],'readwrite',tx=>tx.objectStore('records').put(null,'__blocked'));}
   async function logout(){const uid=owner;await activate(null);await remember(null);if(uid)await transaction(['records'],'readwrite',tx=>tx.objectStore('records').put(uid,'__blocked'));}
-  window.MPDUserStorage={flush,sync,blocked,allowLogin,remember,restoreOffline,logout,activate,habits,photo,legacy,importLegacy,validateHabits,owner:()=>owner,epoch:()=>epoch,readProfile:()=>profileRaw,writeProfile,readArchive:async()=>{if(!owner)throw Error('Inicia sesión.');const uid=owner,token=epoch;const result=await transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').openCursor(),out=[];r.onsuccess=()=>{const c=r.result;if(!c){done(out);return;}if(String(c.key).startsWith(key(uid,'archive:')))out.push(c.value);c.continue();};});same(token);return result;}};
+  window.MPDUserStorage={legacyImportStatus,flush,sync,blocked,allowLogin,remember,restoreOffline,logout,activate,habits,photo,legacy,importLegacy,validateHabits,owner:()=>owner,epoch:()=>epoch,readProfile:()=>profileRaw,writeProfile,readArchive:async()=>{if(!owner)throw Error('Inicia sesión.');const uid=owner,token=epoch;const result=await transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').openCursor(),out=[];r.onsuccess=()=>{const c=r.result;if(!c){done(out);return;}if(String(c.key).startsWith(key(uid,'archive:')))out.push(c.value);c.continue();};});same(token);return result;}};
 })();

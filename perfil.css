@@ -17,3 +17,13 @@
 #perfil button { min-height:44px; }
 #perfil :focus-visible { outline:3px solid #e9d19a; outline-offset:3px; }
 @media(min-width:760px) { .profile-preview { padding:34px; } }
+
+/* Gestión local solo en Configuración, sin formulario permanente en Mi perfil. */
+.legacy-settings{min-width:0;overflow-wrap:anywhere}
+.legacy-settings details{margin-top:16px;min-width:0}
+.legacy-settings summary{cursor:pointer;min-height:44px;line-height:1.5;padding:10px 0}
+.legacy-settings button{min-height:44px;max-width:100%;white-space:normal;overflow-wrap:anywhere;margin:8px 0}
+.legacy-settings #migration-panel{margin-top:20px;border-top:1px solid #514a3d;padding-top:16px}
+.migration-consent{display:flex;align-items:flex-start;gap:10px;margin:16px 0;line-height:1.6;min-width:0}
+.migration-consent input{flex:0 0 22px;width:22px;min-width:22px;margin-top:3px}
+@media(max-width:420px){.legacy-settings{padding:18px}.legacy-settings button{width:100%}}
