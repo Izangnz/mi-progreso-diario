@@ -63,9 +63,13 @@
       .filter(element => element !== button).map(element => [element, element.disabled]);
     frozen.forEach(([element]) => { element.disabled = true; });
     try {
-      if (!navigator.locks?.request) throw new Error("No se puede comprobar el fin del guardado.");
-      // Solo espera el mismo bloqueo que usa la aplicación; no modifica el almacenamiento.
-      await navigator.locks.request("mi-panel-habitos-v1", () => {});
+      if (window.MPDUserStorage?.flush) {
+        await window.MPDUserStorage.flush();
+      } else if (navigator.locks?.request) {
+        await navigator.locks.request("mi-panel-habitos-v1", () => {});
+      } else {
+        throw new Error("No se puede comprobar el fin del guardado.");
+      }
       if (document.getElementById("savedStatus").textContent.startsWith("Aviso:")) {
         throw new Error("Hay un aviso de guardado. Resuélvelo antes de actualizar.");
       }

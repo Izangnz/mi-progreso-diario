@@ -1,24 +1,5 @@
-/* Fotografías privadas en IndexedDB. Nunca se envían a la red. */
+/* Compresión de fotos privadas y acceso al espacio de la cuenta activa. */
 (() => {
-  let database;
-  function open() {
-    if (!database) database = new Promise((resolve,reject) => {
-      if (!window.indexedDB) return reject(Error('Este navegador no permite guardar fotografías. Puedes usar un avatar.'));
-      const request=window.indexedDB.open('mi-progreso-fotos-v1',1);
-      request.onupgradeneeded=()=>request.result.createObjectStore('photos');
-      request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();database=null;};resolve(db);};
-      request.onerror=()=>reject(Error('No se pudo abrir el almacenamiento de fotografías.'));
-      request.onblocked=()=>reject(Error('Cierra otras ventanas para preparar las fotografías.'));
-    }).catch(error=>{database=null;throw error;});
-    return database;
-  }
-  async function transaction(mode,operation) {
-    const db=await open();
-    return new Promise((resolve,reject)=>{
-      const tx=db.transaction('photos',mode);const req=operation(tx.objectStore('photos'));
-      tx.oncomplete=()=>resolve(req.result);tx.onerror=tx.onabort=()=>reject(Error('No se pudo guardar o recuperar la fotografía. Revisa el espacio disponible.'));
-    });
-  }
   async function compress(file) {
     if (!file || !['image/jpeg','image/png','image/webp'].includes(file.type)) throw Error('Selecciona una fotografía JPEG, PNG o WebP.');
     if (!file.size || file.size>10*1024*1024) throw Error('La fotografía debe ocupar menos de 10 MB.');
@@ -36,5 +17,5 @@
       return blob;
     } finally { URL.revokeObjectURL(url); }
   }
-  window.MPDPhoto={compress,get:id=>transaction('readonly',store=>store.get(id)),put:blob=>{const id=crypto.randomUUID();return transaction('readwrite',store=>store.put(blob,id)).then(()=>id);},remove:id=>transaction('readwrite',store=>store.delete(id))};
+  window.MPDPhoto={compress,get:id=>window.MPDUserStorage.photo('get',id),put:blob=>window.MPDUserStorage.photo('put',crypto.randomUUID(),blob),remove:id=>window.MPDUserStorage.photo('delete',id)};
 })();

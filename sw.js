@@ -1,9 +1,11 @@
 /* Cambiar VERSION en cada publicación que modifique archivos de la aplicación.
    Mantener este archivo en la misma dirección. Nunca guarda datos personales. */
-const VERSION = "0.16.0";
+const VERSION = "0.17.0";
 const CACHE_PREFIX = `mi-progreso-diario:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const FILES = [
+  "./welcome.js", "./legacy-access.js",
+  "./habit-sync.js", "./user-storage.js", "./migration-ui.js",
   "./account.js", "./account.css", "./", "./index.html", "./mi_progreso_diario.html", "./pwa.js",
   "./perfil-datos.js", "./perfil.css", "./perfil-foto.js", "./perfil.js",
   "./descubrir.js", "./comunidad.css", "./comunidad-datos.js", "./comunidad.js",

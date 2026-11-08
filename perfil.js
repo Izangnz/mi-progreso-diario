@@ -56,30 +56,36 @@
   $('profilePhotoRemove').addEventListener('click',()=>{if(busy)return;sequence++;processing=false;draftPhoto=null;photoChanged=true;dirty=true;$('profilePhoto').value='';render();status.textContent='Fotografía eliminada del borrador. Guarda para confirmar o cancela para recuperarla.';});
   $('profileForm').addEventListener('submit',async event=>{
     event.preventDefault();if(blocked||busy)return;if(processing){status.textContent='Espera a que termine de prepararse la fotografía.';return;}
+    const accountEpoch=window.MPDUserStorage.epoch();
     let created=null;busyControls(true);
     try {
       const data=readForm();if(!data.fields.alias)throw Error('Escribe un nombre visible o alias.');
       const commit=async()=>{
+        if(accountEpoch!==window.MPDUserStorage.epoch())throw Error('La cuenta cambió.');
         if(store.readRaw()!==baseline)throw Error('El perfil cambió en otra ventana. Recarga para recuperarlo; tu borrador sigue aquí.');
         if(photoChanged)data.photoId=draftPhoto ? (created=await window.MPDPhoto.put(draftPhoto)) : null;
+        if(accountEpoch!==window.MPDUserStorage.epoch())throw Error('La cuenta cambió.');
         // Segunda lectura tras IndexedDB: no sobrescribir cambios durante la espera.
         if(store.readRaw()!==baseline)throw Error('El perfil cambió en otra ventana; tu borrador sigue aquí.');
-        const raw=JSON.stringify({...data,updatedAt:new Date().toISOString()});store.writeRaw(raw);baseline=raw;
+        const raw=JSON.stringify({...data,updatedAt:new Date().toISOString()});await store.writeRaw(raw,baseline);if(accountEpoch!==window.MPDUserStorage.epoch())return;baseline=raw;
       };
       if(navigator.locks?.request)await navigator.locks.request(KEY,commit);else await commit();
+      if(accountEpoch!==window.MPDUserStorage.epoch())return;
       const oldId=saved.photoId;saved=data;if(photoChanged)savedPhoto=draftPhoto;
       dirty=false;photoChanged=false;draftPhoto=null;render();
       let cloudSaved=false;
       try {cloudSaved=await window.MPDCloudPrivacy?.save() || false;}
-      catch(error) {dirty=true;status.textContent='Datos locales guardados; privacidad NO confirmada en Supabase. '+error.message;return;}
+      catch(error) {if(accountEpoch!==window.MPDUserStorage.epoch())return;dirty=true;status.textContent='Datos locales guardados; privacidad NO confirmada en Supabase. '+error.message;return;}
+      if(accountEpoch!==window.MPDUserStorage.epoch())return;
       editor(false);displayStatus.textContent=cloudSaved ? 'Perfil local guardado. '+document.getElementById('cloud-privacyStatus').textContent : 'Perfil guardado en este dispositivo. No se ha publicado.';
       if(oldId && oldId!==data.photoId)window.MPDPhoto.remove(oldId).catch(()=>{});
-    } catch(error){if(created)await window.MPDPhoto.remove(created).catch(()=>{});dirty=true;status.textContent='No se ha guardado. '+error.message;}
-    finally{busyControls(false);}
+    } catch(error){if(accountEpoch!==window.MPDUserStorage.epoch())return;if(created)await window.MPDPhoto.remove(created).catch(()=>{});dirty=true;status.textContent='No se ha guardado. '+error.message;}
+    finally{if(accountEpoch===window.MPDUserStorage.epoch())busyControls(false);}
   });
   window.MPDProfile={hasUnsavedChanges:()=>dirty||busy||processing,enter:()=>{editor(false);if(dirty)displayStatus.textContent="Tienes un borrador pendiente. Abre Editar perfil para continuar o cancelar.";}};
   // Leer perfiles 0.12.0 sin migraciones destructivas ni nuevas escrituras.
-  const ready=(async()=>{
+  async function loadAccount(){
+    const token=window.MPDUserStorage.epoch();
     $('profileEdit').disabled=true;
     try {
       baseline=store.readRaw();
@@ -87,11 +93,17 @@
         if(data.version!==1 || data.visibility!=='local' || !data.fields || !Array.isArray(data.links) || data.links.length>5 || (data.photoId!=null && (typeof data.photoId!=='string'||data.photoId.length>100)))throw Error('Formato de perfil no compatible.');
         for(const [key,max] of Object.entries(limits)){const value=data.fields[key]??(key==='occupation'?'':undefined);if(typeof value!=='string'||value.length>max)throw Error('Perfil local inválido.');saved.fields[key]=clean(value,max);}
         saved.links=data.links.map(validLink);saved.photoId=data.photoId??null;
-        if(saved.photoId){try {savedPhoto=await window.MPDPhoto.get(saved.photoId);if(!savedPhoto)throw Error('No se encuentra la fotografía.');}catch(error){displayStatus.textContent='No se pudo recuperar la foto. Tus datos y su referencia se conservan. Puedes cambiarla desde Editar perfil.';}}
+        if(saved.photoId){try {const restoredPhoto=await window.MPDPhoto.get(saved.photoId);if(token!==window.MPDUserStorage.epoch())return;savedPhoto=restoredPhoto;if(!savedPhoto)throw Error('No se encuentra la fotografía.');}catch(error){if(token!==window.MPDUserStorage.epoch())return;displayStatus.textContent='No se pudo recuperar la foto. Tus datos y su referencia se conservan. Puedes cambiarla desde Editar perfil.';}}
       }
+      if(token!==window.MPDUserStorage.epoch())return;
       fill();render();
-    }catch(error){blocked=true;displayStatus.textContent='No se pudo leer el perfil local. Se conserva intacto; el guardado está bloqueado. '+error.message;$('profileSave').disabled=true;render();}
-    finally{$('profileEdit').disabled=false;}
-  })();
+    }catch(error){if(token!==window.MPDUserStorage.epoch())return;blocked=true;displayStatus.textContent='No se pudo leer el perfil local. Se conserva intacto; el guardado está bloqueado. '+error.message;$('profileSave').disabled=true;render();}
+    finally{if(token===window.MPDUserStorage.epoch())$('profileEdit').disabled=!window.MPDUserStorage.owner();}
+  }
+  function lockAccount(){sequence++;clearUrls();baseline=null;blocked=false;dirty=false;busy=false;processing=false;saved={version:1,visibility:'local',fields:Object.fromEntries(Object.keys(limits).map(key=>[key,''])),links:[],photoId:null};savedPhoto=null;draftPhoto=null;photoChanged=false;fill();render();editor(false);$('profilePhoto').value='';status.textContent='';displayStatus.textContent='';$('profileEdit').disabled=true;}
+  window.addEventListener('mpd-owner-lock',lockAccount);
+  window.addEventListener('mpd-owner-ready',()=>loadAccount());
+  window.addEventListener('mpd-imported',()=>{lockAccount();loadAccount();});
+  const ready=loadAccount();
   window.MPDProfile.ready=ready;
 })();

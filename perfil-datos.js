@@ -6,8 +6,8 @@
   window.MPDProfileData = Object.freeze({
     local: Object.freeze({
       key,
-      readRaw: () => localStorage.getItem(key),
-      writeRaw: raw => localStorage.setItem(key, raw)
+      readRaw: () => window.MPDUserStorage.readProfile(),
+      writeRaw: (raw, baseline) => window.MPDUserStorage.writeProfile(raw, baseline)
     }),
     // Contrato independiente: nunca devuelve fields, photoId o hábitos locales.
     public: Object.freeze({
