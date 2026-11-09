@@ -12,6 +12,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <script src="./user-storage.js"></script>
   <script src="./migration-ui.js" defer></script>
+  <script src="./habit-transport.js" defer></script>
   <script src="./habit-sync.js" defer></script>
   <script src="./pwa.js" defer></script>
   <style>
@@ -296,13 +297,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
  </div><p class="welcome-footer">HÁBITOS · DISCIPLINA · PROPÓSITO</p>
 </section>
 <div id="application-shell" hidden>
-<aside id="sync-panel" class="card" aria-label="Sincronización de hábitos">
- <p id="sync-status" role="status" aria-live="polite">Guardado en este dispositivo. Inicia sesión para sincronizar.</p>
- <button id="sync-retry" type="button">Sincronizar ahora</button>
- <section id="sync-review" hidden><h3>Confirma las eliminaciones</h3><p id="sync-review-summary"></p><p>La operación todavía no se ha aplicado en Cloud. Exporta antes tus datos si tienes dudas.</p><label><input id="sync-review-consent" type="checkbox">Confirmo que estas eliminaciones son intencionadas.</label><button id="sync-review-accept" type="button" disabled>Confirmar eliminaciones y reintentar</button></section>
- <section id="sync-conflict" hidden><h3>Hay cambios en otro dispositivo</h3><p>No se ha reemplazado ninguna versión. La versión local permanece disponible y la remota no se modificará.</p><p id="sync-conflict-summary"></p><button id="sync-export" type="button">Exportar ambas versiones</button><label><input id="sync-consent" type="checkbox">Conservar la versión remota y archivar mis cambios locales para revisarlos.</label><button id="sync-accept" type="button" disabled>Usar remota y archivar local</button><p>Después puedes volver a aplicar los cambios que necesites. No se combinan listas automáticamente para evitar resucitar hábitos eliminados.</p></section>
-<details><summary>Recuperar una versión anterior</summary><p>Se conservan como máximo 10 versiones anteriores y hasta 30 días. Restaurar crea una revisión nueva; no rebobina la sincronización. Exporta tus datos antes si necesitas una copia duradera.</p><button id="sync-versions" type="button">Consultar mis versiones</button><label>Versión<select id="sync-version"></select></label><label><input id="sync-restore-consent" type="checkbox">Confirmo que quiero recuperar la versión seleccionada.</label><button id="sync-restore" type="button">Recuperar versión</button></details>
-</aside>
+
 <main>
   <aside id="pwaUpdate" class="pwa-update" aria-label="Actualización de la aplicación" hidden>
     <p id="pwaUpdateMessage" role="status">Nueva versión disponible. Puedes actualizar cuando termines.</p>
@@ -310,8 +305,9 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   </aside>
   <header class="app-header"><h1>Mi Progreso Diario</h1></header>
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
+  <p id="cloud-sync-summary" class="muted" role="status">Guardado en este dispositivo. Cloud Sync está desactivado en esta versión.</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.17.2</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.18.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -482,6 +478,13 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <section id="settings" class="app-view" hidden aria-labelledby="settingsTitle">
     <button type="button" id="cloud-backSettings" class="secondary-action">← Mi perfil</button>
     <h2 id="settingsTitle" tabindex="-1">Configuración</h2>
+<aside id="sync-panel" class="card" aria-label="Sincronización de hábitos" hidden>
+ <p id="sync-status" role="status" aria-live="polite">Guardado en este dispositivo. Inicia sesión para sincronizar.</p>
+ <button id="sync-retry" type="button">Sincronizar ahora</button>
+ <section id="sync-review" hidden><h3>Confirma las eliminaciones</h3><p id="sync-review-summary"></p><p>La operación todavía no se ha aplicado en Cloud. Exporta antes tus datos si tienes dudas.</p><label><input id="sync-review-consent" type="checkbox">Confirmo que estas eliminaciones son intencionadas.</label><button id="sync-review-accept" type="button" disabled>Confirmar eliminaciones y reintentar</button></section>
+ <section id="sync-conflict" hidden><h3>Hay cambios en otro dispositivo</h3><p>No se ha reemplazado ninguna versión. La versión local permanece disponible y la remota no se modificará.</p><p id="sync-conflict-summary"></p><button id="sync-export" type="button">Exportar ambas versiones</button><label><input id="sync-consent" type="checkbox">Conservar la versión remota y archivar mis cambios locales para revisarlos.</label><button id="sync-accept" type="button" disabled>Usar remota y archivar local</button><p>Después puedes volver a aplicar los cambios que necesites. No se combinan listas automáticamente para evitar resucitar hábitos eliminados.</p></section>
+<details><summary>Recuperar una versión anterior</summary><p>Se conservan como máximo 10 versiones anteriores y hasta 30 días. Restaurar crea una revisión nueva; no rebobina la sincronización. Exporta tus datos antes si necesitas una copia duradera.</p><button id="sync-versions" type="button">Consultar mis versiones</button><label>Versión<select id="sync-version"></select></label><label><input id="sync-restore-consent" type="checkbox">Confirmo que quiero recuperar la versión seleccionada.</label><button id="sync-restore" type="button">Recuperar versión</button></details>
+</aside>
   <section id="legacy-settings" class="card legacy-settings" hidden aria-labelledby="legacy-settings-title">
     <h3 id="legacy-settings-title">Datos de este dispositivo</h3>
     <p id="migration-notice" class="muted" role="status" hidden></p>
@@ -508,7 +511,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
     <button type="button" id="cloud-signout" hidden disabled>Cerrar sesión</button>
   </section>
   </section>
-  <p class="footer">Tus hábitos, fotografía y perfil privado se guardan solo en este navegador y dispositivo. La cuenta opcional y el alias público se gestionan en Supabase. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
+  <p class="footer">Hábitos, historial y objetivo se guardan en este dispositivo. Cloud Sync está desactivado en esta versión. La fotografía y el perfil privado siguen siendo locales. La cuenta opcional y el alias público se gestionan en Supabase. Si borras los datos del navegador, puedes perderlos. La lista de hábitos se mantiene, pero las casillas se reinician cada día.</p>
 </main>
 <nav class="bottom-nav" aria-label="Navegación principal">
   <div class="nav-items">

@@ -1,6 +1,9 @@
 .DS_Store
 .env
 .env.*
+.test-config.local.json
+.local-dev/
+.local-diagnostics/
+pruebas/
 supabase-config.local.js
 Docker.app/
-.local-diagnostics/

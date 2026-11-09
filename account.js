@@ -283,7 +283,7 @@
     if (error) throw error;
     if(initialSequence===sessionSequence && await bindSession(data.session))await refresh(data.session);
     [...$('cloud-profileForm').querySelectorAll('button'), ...$('cloud-account').querySelectorAll('button'), ...dialog.querySelectorAll('button')].forEach(button => {button.disabled=false;});
-    status('Los hábitos permanecen solo en este dispositivo.');
+    status('Cuenta validada. Tus hábitos permanecen en este dispositivo.');
     if (location.hash) history.replaceState(null,'',location.pathname+location.search);
     await loadPublic().catch(()=>status('No se pudo consultar el perfil público. Comprueba tu conexión.'));
 

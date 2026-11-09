@@ -37,7 +37,7 @@
   try{
    const result=await storage.importLegacy(snapshot,true);if(epoch!==storage.epoch())return;
    await scan();if(epoch!==storage.epoch())return;
-   $('migration-result').textContent=result==='already'?'Estos datos ya estaban incorporados. No se han duplicado.':'Importación completada en esta cuenta y dispositivo. Los originales se conservan. Sin sincronización entre dispositivos.';
+   $('migration-result').textContent=result==='already'?'Estos datos ya estaban incorporados. No se han duplicado.':'Importación completada en esta cuenta y dispositivo. Los originales se conservan. No se ha enviado ningún hábito a Cloud; la fotografía y el perfil privado siguen locales.';
   }catch(e){if(epoch===storage.epoch())$('migration-result').textContent=e.message;}
   finally{busy=false;if(epoch===storage.epoch()){$('migration-consent').checked=false;$('migration-import').disabled=true;}}
  });
