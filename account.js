@@ -81,6 +81,7 @@
     privacyStatus('Cambio sin guardar. Pulsa Guardar cambios para confirmarlo.');
   });
   async function loadPrivacy() {
+
     if (privacySaving) return;
     privacyLoaded = false; $('cloud-privacy').disabled = true;
     if (!client || !user) {paintPrivacy(false);privacyStatus('Inicia sesión para gestionar tu visibilidad.');return;}
@@ -99,6 +100,7 @@
   $('profileEdit').addEventListener('click', () => {privacyLoading=loadPrivacy();});
   $('profileCancel').addEventListener('click', () => {if (!privacySaving) {paintPrivacy(savedVisibility);privacyStatus('Cambios de visibilidad descartados.');}});
   async function saveCloudProfile() {
+
     const accountEpoch=storage.epoch(), owner=user?.id;
     if (!user) return false;
     if (privacySaving) throw Error('Ya se está guardando la privacidad.');
@@ -188,6 +190,8 @@
       error.code === 'invalid_credentials' ? 'Email o contraseña incorrectos.' :
       error.code === 'email_not_confirmed' ? 'Confirma tu email antes de entrar.' :
       error.code === 'over_email_send_rate_limit' || error.status === 429 ? 'Demasiados intentos. Espera unos minutos antes de volver a probar.' :
+      error.code === 'email_address_not_authorized' ? 'El servicio de correo no admite este destinatario. No se ha iniciado sesión.' :
+      error.code === 'signup_disabled' ? 'El registro está deshabilitado.' :
       error.code === 'weak_password' ? 'Usa una contraseña de al menos 8 caracteres.' :
       'No se pudo completar la operación. Revisa los datos y tu conexión.');
     return false;
@@ -241,6 +245,7 @@
   async function loadPublic() {
     if (client && publicAlias) await window.MPDPublicPeople.open(publicAlias);
   }
+  async function initializeAuth(){
   try {
     if(authTimedOut)return;
     const config = window.MPD_SUPABASE;
@@ -250,11 +255,12 @@
     if (!config.publishableKey.startsWith('sb_publishable_')) throw Error('config');
     // El SDK en caché no debe invalidar el marcador offline sin poder validar online.
     if(navigator.onLine===false)throw Error('offline');
-    const {createClient} = await import('https://esm.sh/@supabase/supabase-js@2.49.1');
+    const {createClient} = window.supabase || await import('https://esm.sh/@supabase/supabase-js@2.49.1');
     if(authTimedOut)return;
     recovery = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
     client = createClient(config.url, config.publishableKey, {auth:{storageKey:'mpd-auth-v1',flowType:'implicit',detectSessionInUrl:true}});
     window.MPDPublicPeople.connect(client);
+    $('cloud-authSubmit').disabled=false;
     window.MPDHabitSync.connect(client);
     client.auth.onAuthStateChange((event, session) => {
       if(authTimedOut)return;
@@ -283,22 +289,25 @@
     if (error) throw error;
     if(initialSequence===sessionSequence && await bindSession(data.session))await refresh(data.session);
     [...$('cloud-profileForm').querySelectorAll('button'), ...$('cloud-account').querySelectorAll('button'), ...dialog.querySelectorAll('button')].forEach(button => {button.disabled=false;});
-    status('Cuenta validada. Tus hábitos permanecen en este dispositivo.');
+    status(data.session?.user?'Cuenta validada. Hábitos guardados localmente; consulta su estado de sincronización.':'Sin cuenta validada. Puedes explorar hábitos temporales o iniciar sesión.');
     if (location.hash) history.replaceState(null,'',location.pathname+location.search);
     await loadPublic().catch(()=>status('No se pudo consultar el perfil público. Comprueba tu conexión.'));
 
   } catch (error) {
     if(authTimedOut)return;
-    client = null;
-    [...$('cloud-profileForm').querySelectorAll('button'), ...$('cloud-account').querySelectorAll('button'), ...dialog.querySelectorAll('button')].filter(button => !['cloud-openAuth','cloud-closeAuth','cloud-backAuth','cloud-switchAuth'].includes(button.id)).forEach(button => {button.disabled=true;});
+    // Un error de red en getSession/getUser no destruye un SDK ya inicializado.
+    [...$('cloud-profileForm').querySelectorAll('button'), ...$('cloud-account').querySelectorAll('button'), ...dialog.querySelectorAll('button')].filter(button => !['cloud-openAuth','cloud-closeAuth','cloud-backAuth','cloud-switchAuth'].includes(button.id)).forEach(button => {button.disabled=!client;});
     const restored=navigator.onLine===false && await storage.restoreOffline().catch(()=>false);
+    if(error?.message==='offline'&&!client)window.addEventListener('online',()=>initializeAuth(),{once:true});
     if(authTimedOut){await storage.activate(null).catch(()=>{});return;}
     if(!restored)await storage.activate(null).catch(()=>{});
     $('cloud-signout').hidden=!restored;$('cloud-signout').disabled=!restored;
-    status(restored?'Acceso local offline previamente validado (máximo 7 días). Sin sincronización Cloud.':'Sin cuenta validada disponible. Puedes explorar y probar hábitos temporales.');
-    if(restored)window.MPDWelcome?.session(storage.owner());
+    status(client&&!restored?'No se pudo comprobar la sesión. Puedes volver a intentar Iniciar sesión o Crear cuenta.':restored?'Acceso local offline previamente validado (máximo 7 días). Sin sincronización Cloud.':'Sin cuenta validada disponible. Puedes explorar y probar hábitos temporales.');
+    if(restored){window.MPDWelcome?.session(storage.owner());}
     else if(navigator.onLine===false)window.MPDWelcome?.session(null);
     else authFailure(error);
     if (publicAlias) {$('cloud-publicProfile').hidden=false;$('cloud-publicProfileText').textContent='Para consultar un perfil necesitas conexión y configurar Supabase.';}
   }
+  }
+  await initializeAuth();
 })();

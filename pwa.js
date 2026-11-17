@@ -87,7 +87,13 @@
       message.textContent = error.message;
     }
   });
-  navigator.serviceWorker.register("./sw.js", {scope:"./",updateViaCache:"none"}).then(reg => {
+  (async () => {
+    if (navigator.onLine === false) {
+      const existing = await navigator.serviceWorker.getRegistration("./");
+      if (existing) return existing;
+    }
+    return navigator.serviceWorker.register("./sw.js", {scope:"./",updateViaCache:"none"});
+  })().then(reg => {
     registration = reg;
     watchWorker(reg.waiting);
     watchWorker(reg.installing);

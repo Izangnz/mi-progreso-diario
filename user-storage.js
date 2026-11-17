@@ -30,23 +30,49 @@
   async function bundle(action){const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión para sincronizar.');
     const result=await transaction(['records'],'readwrite',(tx,done)=>{const store=tx.objectStore('records'),h=store.get(key(uid,'habits')),m=store.get(key(uid,'sync'));let count=0;const finish=()=>{if(++count!==2)return;try{same(token);const meta=m.result??{...newSync(),existing:!!h.result};action({store,uid,data:h.result??null,meta,done});}catch{tx.abort();}};h.onsuccess=finish;m.onsuccess=finish;});same(token);return result;
   }
+  // JSONB puede devolver las mismas propiedades en otro orden.
+  function documentSignature(value){
+    return JSON.stringify(value,(_name,item)=>{
+      if(item===null||typeof item!=='object'||Array.isArray(item))return item;
+      return Object.fromEntries(Object.keys(item).sort().map(name=>[name,item[name]]));
+    });
+  }
   async function habits(change,options={}){const uid=owner,token=epoch;if(!uid){guestHabits??=empty();const next=structuredClone(guestHabits);if(change)change(next);same(token);guestHabits=next;return next;}
-    let changed=false;const result=await bundle(({store,uid,data,meta,done})=>{const value=data??empty(),before=JSON.stringify(value),previous=structuredClone(value),oldIds=value.habits.map(h=>typeof h.id+':'+h.id);if(change)change(value);
+    let changed=false;const result=await bundle(({store,uid,data,meta,done})=>{const value=data??empty(),before=documentSignature(value),previous=structuredClone(value),oldIds=value.habits.map(h=>typeof h.id+':'+h.id);if(change)change(value);
       const present=new Set(value.habits.map(h=>typeof h.id+':'+h.id));const deleted=oldIds.filter(id=>!present.has(id));if(options.userChange===true){const requested=diffIntent(previous,value);meta.intent=mergeIntent(meta.intent,requested);for(const [name,field] of [['history_days','deletedHistoryDays'],['history_entries','deletedHistoryEntries']])if(requested[name].length)value[field]=[...new Set([...(value[field]||[]),...requested[name]])];}if(deleted.length)value.deletedHabitIds=[...new Set([...(value.deletedHabitIds||[]),...deleted])];
-      if(change&&JSON.stringify(value)!==before){changed=true;meta.dirty=true;meta.existing=meta.existing||options.userChange===true;store.put(value,key(uid,'habits'));store.put(meta,key(uid,'sync'));}done(value);});if(changed)notify('mpd-sync-dirty');return result;
+      if(change&&documentSignature(value)!==before){changed=true;meta.dirty=true;meta.existing=meta.existing||options.userChange===true;store.put(value,key(uid,'habits'));store.put(meta,key(uid,'sync'));}done(value);});if(changed)notify('mpd-sync-dirty');return result;
   }
   // El servidor puede normalizar estadísticas y marcas, no cambiar el contenido confirmado.
   function contentSignature(value){const items=list=>list.map(h=>({id:h.id,name:h.name,done:h.done}));return JSON.stringify({day:value.day,weeklyGoal:value.weeklyGoal,habits:items(value.habits),history:Object.keys(value.history).sort().map(day=>[day,items(value.history[day].habits)])});}
+  async function verifiedBackup(){
+    const uid=owner,token=epoch,snapshot=await sync.snapshot();same(token);
+    if(!snapshot.data)return null;
+    const raw=JSON.stringify({habits:snapshot.data,pending:snapshot.meta.pending,pendingRecovery:snapshot.meta.pendingRecovery});
+    const digest=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(v=>v.toString(16).padStart(2,'0')).join('');
+    const hash=await digest(raw);same(token);
+    const name='archive:verified-'+hash;
+    await transaction(['records'],'readwrite',tx=>{same(token);tx.objectStore('records').put({kind:'verified-before-sync',habitsRaw:JSON.stringify(snapshot.data),snapshotRaw:raw,sha256:hash,importedAt:new Date().toISOString()},key(uid,name));});
+    const saved=await read(uid,name);same(token);
+    if(saved?.snapshotRaw!==raw||await digest(saved.snapshotRaw)!==hash)throw Error('No se pudo verificar el respaldo; sincronización detenida.');
+    same(token);return hash;
+  }
   const sync={
+    backup:verifiedBackup,
     diffIntent,
     snapshot:()=>bundle(({data,meta,done})=>done({data,meta})),
     freeze:()=>bundle(({store,uid,data,meta,done})=>{if(meta.conflict||meta.revision===null){done(null);return;}if(!meta.pending&&meta.dirty&&data){meta.pending={id:crypto.randomUUID(),base:meta.revision,payload:structuredClone(data),intent:structuredClone(meta.intent||blankIntent()),protocol:2};meta.intent=blankIntent();meta.dirty=false;store.put(meta,key(uid,'sync'));}done(meta.pending);}),
     pull:(remote)=>bundle(({store,uid,data,meta,done})=>{
+      if(!remote||!Number.isSafeInteger(remote.revision)||remote.revision<0||(remote.revision===0&&remote.payload!==null)||(remote.revision>0&&!remote.payload))throw Error('Estado remoto incoherente; se conservan datos y revisión locales.');
+      if(meta.revision!==null&&remote.revision<meta.revision)throw Error('La revisión remota retrocedió; no se acepta la descarga.');
+      if(remote.payload)validateHabits(remote.payload);
       if(meta.pending){done('pending');return;}
       if(meta.revision===remote.revision){
         if(meta.needsCanonical&&remote.payload){validateHabits(remote.payload);if(meta.expectedCore&&contentSignature(remote.payload)!==meta.expectedCore)throw Error('La confirmación remota no coincide con los cambios enviados. Los datos locales se conservan.');if(!meta.dirty)store.put(remote.payload,key(uid,'habits'));else if(data){for(const field of ['deletedHabitIds','deletedHistoryDays','deletedHistoryEntries','importedLegacyHashes'])data[field]=[...new Set([...(data[field]||[]),...(remote.payload[field]||[])])];store.put(data,key(uid,'habits'));}meta.needsCanonical=false;meta.expectedCore=null;store.put(meta,key(uid,'sync'));done('downloaded');return;}
         done('same');return;
       }
+      // Una descarga que retire datos requiere revisión, incluso sin cambios locales pendientes.
+      const removed=data&&remote.payload?diffIntent(data,remote.payload):null;
+      if(removed&&(removed.habits.length||removed.history_days.some(day=>data.history[day].habits.length||meta.revision!==null||meta.existing)||removed.history_entries.length||removed.clear_goal)){meta.conflict=remote;store.put(meta,key(uid,'sync'));done('conflict');return;}
       if(remote.payload && (meta.dirty||meta.existing) && (meta.revision!==null||meta.existing)){
         meta.conflict=remote;store.put(meta,key(uid,'sync'));done('conflict');return;
       }
@@ -69,7 +95,8 @@
   function validateHabits(data){if(!data||!validDate(data.day)||!Array.isArray(data.habits)||typeof data.weeklyGoal!=='string'||data.weeklyGoal.length>1000||!data.history||typeof data.history!=='object'||Array.isArray(data.history))throw Error('Hábitos o fechas anteriores inválidos. No se ha importado nada.');
     const list=items=>{if(!Array.isArray(items)||items.some(h=>!h||!['string','number'].includes(typeof h.id)||typeof h.name!=='string'||!h.name.trim()||typeof h.done!=='boolean'))throw Error('Lista de hábitos anterior inválida.');const ids=items.map(h=>typeof h.id+':'+h.id);if(new Set(ids).size!==ids.length)throw Error('Hay identificadores de hábitos repetidos.');};list(data.habits);
     for(const [day,value] of Object.entries(data.history)){if(!validDate(day)||!value)throw Error('Historial anterior inválido.');list(value.habits);}return data;}
-  async function legacy(){const habitsRaw=localStorage.getItem('mi-panel-habitos-v1'),privateRaw=localStorage.getItem('mi-progreso-perfil-v1');if(!habitsRaw&&!privateRaw)return null;
+  async function legacy(){
+const habitsRaw=localStorage.getItem('mi-panel-habitos-v1'),privateRaw=localStorage.getItem('mi-progreso-perfil-v1');if(!habitsRaw&&!privateRaw)return null;
     const data=habitsRaw?validateHabits(JSON.parse(habitsRaw)):empty();const profile=privateRaw?JSON.parse(privateRaw):null;
     if(profile){const limits={alias:60,avatar:8,bio:300,city:80,occupation:120,interests:200,project:120,learning:500,goal:300};if(profile.version!==1||profile.visibility!=='local'||!profile.fields||!Array.isArray(profile.links)||profile.links.length>5)throw Error('Perfil anterior inválido.');for(const [field,max] of Object.entries(limits)){const v=profile.fields[field]??(field==='occupation'?'':undefined);if(typeof v!=='string'||v.length>max)throw Error('Campo de perfil anterior inválido.');}for(const link of profile.links){const url=new URL(link);if(url.protocol!=='https:'||url.username||url.password)throw Error('Enlace anterior inválido.');}}
     let blob=null;if(profile?.photoId){if(typeof profile.photoId!=='string')throw Error('Referencia de foto inválida.');blob=await new Promise((resolve,reject)=>{const r=indexedDB.open('mi-progreso-fotos-v1');r.onupgradeneeded=()=>{r.transaction.abort();reject(Error('No se encuentra la base de fotografías anterior.'));};r.onerror=()=>reject(Error('No se pudo leer la foto anterior.'));r.onsuccess=()=>{const db=r.result;try{const tx=db.transaction('photos','readonly'),q=tx.objectStore('photos').get(profile.photoId);q.onsuccess=()=>{if(!q.result)reject(Error('Falta la fotografía anterior.'));else resolve(q.result);};q.onerror=()=>reject(Error('No se pudo leer la foto.'));tx.oncomplete=()=>db.close();}catch(e){db.close();reject(e);}};});if(!(blob instanceof Blob)||blob.size>512*1024)throw Error('Fotografía anterior inválida.');}
@@ -90,7 +117,8 @@
       };receipt.onsuccess=habits.onsuccess=finish;
     });same(token);return result;
   }
-  async function importLegacy(snapshot,confirmed){if(!confirmed)throw Error('Confirma explícitamente la importación.');const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión antes de importar.');const fresh=await legacy();same(token);if(!fresh||fresh.fingerprint!==snapshot.fingerprint)throw Error('Los datos anteriores cambiaron. Revisa de nuevo el resumen.');
+  async function importLegacy(snapshot,confirmed){
+if(!confirmed)throw Error('Confirma explícitamente la importación.');const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión antes de importar.');const fresh=await legacy();same(token);if(!fresh||fresh.fingerprint!==snapshot.fingerprint)throw Error('Los datos anteriores cambiaron. Revisa de nuevo el resumen.');
     const stamp=new Date().toISOString(),mapping=new Map();const mapId=id=>{const k=typeof id+':'+id;if(!mapping.has(k))mapping.set(k,crypto.randomUUID());return mapping.get(k);};const imported=structuredClone(fresh.data);imported.habits=imported.habits.map(h=>({...h,id:mapId(h.id)}));for(const record of Object.values(imported.history))record.habits=record.habits.map(h=>({...h,id:mapId(h.id)}));
     const result=await transaction(stores,'readwrite',(tx,done)=>{const records=tx.objectStore('records'),ledger=tx.objectStore('imports');const check=ledger.get(fresh.fingerprint);check.onsuccess=()=>{if(token!==epoch){tx.abort();return;}if(check.result){done(check.result.owner===uid?'already':'other');return;}
       const h=records.get(key(uid,'habits')),pr=records.get(key(uid,'profile'));let count=0;const finish=()=>{if(++count!==2)return;try{same(token);const current=h.result;if(current?.importedLegacyHashes?.includes(fresh.fingerprint)){ledger.put({owner:uid,at:stamp},fresh.fingerprint);done('already');return;}let next=imported;if(current){next=structuredClone(current);next.habits.push(...imported.habits.map(v=>({...v,done:current.day===imported.day?v.done:false})));for(const [day,record] of Object.entries(imported.history))if(!Object.hasOwn(next.history,day))next.history[day]=record;if(!next.weeklyGoal)next.weeklyGoal=imported.weeklyGoal;}

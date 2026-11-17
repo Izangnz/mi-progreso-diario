@@ -1,9 +1,10 @@
 /* Cambiar VERSION en cada publicación que modifique archivos de la aplicación.
    Mantener este archivo en la misma dirección. Nunca guarda datos personales. */
-const VERSION = "0.18.0";
+const VERSION = "0.19.0";
 const CACHE_PREFIX = `mi-progreso-diario:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const FILES = [
+  "./supabase-sdk-2.49.1.js", "./supabase-config.public.js",
   "./habit-transport.js",
   "./welcome.js", "./legacy-access.js",
   "./habit-sync.js", "./user-storage.js", "./migration-ui.js",
