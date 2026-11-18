@@ -2,7 +2,7 @@
 (async () => {
   const $ = id => document.getElementById(id);
   const status = message => { $('cloud-accountStatus').textContent = message; $('cloud-authStatus').textContent = message; $('cloud-editorStatus').textContent = message; };
-  let client, user, recovery = false, revision = 0, sessionSequence=0, authTimedOut=window.MPDWelcome?.state()==='error';
+  let client, user, recoveryClient, recoveryView = false, revision = 0, sessionSequence=0, authTimedOut=window.MPDWelcome?.state()==='error';
   const storage=window.MPDUserStorage;
   window.addEventListener('mpd-auth-timeout',()=>{
     authTimedOut=true;sessionSequence++;storage.activate(null).catch(()=>{});
@@ -52,6 +52,10 @@
     $('cloud-email').focus();
   }
   function closeAuth() {
+    if (recoveryView) {
+      if (!busy) { clearCallback(); location.reload(); }
+      return;
+    }
     dialog.close();
     $('cloud-password').value = ''; $('cloud-newPassword').value = '';
     if (typeof showView === 'function') showView('perfil');
@@ -140,20 +144,15 @@
     clearProfile();
     $('cloud-credentials').hidden = !!user;
     $('cloud-signout').hidden = !user;
-    $('cloud-openAuth').hidden = !!user && !recovery;
-    if (user && recovery) {
-      if (typeof showView === 'function') showView('perfil');
-      if (!dialog.open) dialog.showModal();
-      $('cloud-authTitle').textContent = 'Nueva contraseña';
-      $('cloud-authIntro').textContent = 'Elige una contraseña para volver a tu cuenta.';
-    } else if (user && dialog.open) closeAuth();
-    $('cloud-profileForm').hidden = !user || recovery;
+    $('cloud-openAuth').hidden = !!user;
+    if (user && dialog.open) closeAuth();
+    $('cloud-profileForm').hidden = !user;
     $('cloud-editorGuest').hidden = !!user;
     $('cloud-profileSummary').textContent = user ? 'Todavía no has guardado un alias público.' : 'Sin alias público vinculado.';
-    $('cloud-recoveryForm').hidden = !user || !recovery;
+    $('cloud-recoveryForm').hidden = true;
     window.MPDWelcome?.session(user);
     $('cloud-sessionLabel').textContent = user ? 'Sesión iniciada' : 'Sin cuenta: puedes seguir usando tus hábitos.';
-    if (!user || recovery) return;
+    if (!user) return;
     const {data, error} = await client.from('mpd_profiles').select('alias,display_name,is_public').eq('user_id', user.id).maybeSingle();
     if (current !== revision) return;
     if (error) { status('No se pudo cargar el perfil. Comprueba la conexión y la migración.'); return; }
@@ -218,7 +217,7 @@
   }));
   $('cloud-signout').addEventListener('click', async () => {
     ++sessionSequence;
-    user=null;recovery=false;
+    user=null;
     const closing=storage.logout(); // Oculta el propietario de forma síncrona.
     try {await closing;} catch {status('Datos ocultos. No se pudo confirmar el cierre local; vuelve a intentarlo.');return;}
     window.MPDWelcome?.session(null);
@@ -227,14 +226,73 @@
       if(report(error,'Sesión cerrada. Tus datos se conservan en este dispositivo.'))await refresh(null);
     });
   });
-  $('cloud-recoveryForm').addEventListener('submit', event => {
-    event.preventDefault(); perform(async () => {
-      const {error} = await client.auth.updateUser({password:$('cloud-newPassword').value});
-      if (report(error, 'Contraseña actualizada.')) {
-        $('cloud-newPassword').value = ''; recovery = false;
-        await refresh((await client.auth.getSession()).data.session);
+  const recoveryForm = $('cloud-recoveryForm');
+  const recoverySubmit = recoveryForm.querySelector('button[type=submit]');
+  const invalidLink = 'El enlace ha caducado o no es válido. Vuelve a ProgressMate y solicita otro.';
+  function clearCallback() {
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  }
+  async function openRecovery(createClient, config, params) {
+    recoveryView = true;
+    await storage.activate(null);
+    window.MPDWelcome?.session(null);
+    $('cloud-credentials').hidden = true;
+    $('cloud-backAuth').textContent = '← Volver a ProgressMate';
+    $('cloud-authTitle').textContent = 'Recuperar contraseña';
+    $('cloud-authIntro').textContent = 'Comprobando el enlace…';
+    dialog.showModal();
+    try {
+      const accessToken = params.get('access_token');
+      const expiresAt = Number(params.get('expires_at'));
+      if (params.has('error') || params.has('error_code') || params.has('error_description') ||
+          !accessToken || !params.get('refresh_token') ||
+          (params.has('expires_at') && !(expiresAt > Date.now() / 1000))) return;
+      // El SDK valida el token del enlace con Auth. Este cliente vive solo en memoria
+      // y nunca abre el propietario local ni modifica su bloqueo de cierre de sesión.
+      const temporary = createClient(config.url, config.publishableKey, {auth:{
+        storageKey:'mpd-auth-recovery-v1', flowType:'implicit', detectSessionInUrl:true,
+        persistSession:false, autoRefreshToken:false
+      }});
+      const {data, error} = await temporary.auth.getSession();
+      if (error || data.session?.access_token !== accessToken || !data.session?.user?.id) return;
+      recoveryClient = temporary;
+      $('cloud-authTitle').textContent = 'Nueva contraseña';
+      $('cloud-authIntro').textContent = 'Elige una contraseña para volver a tu cuenta.';
+      recoveryForm.hidden = false;
+      recoverySubmit.disabled = false;
+      $('cloud-newPassword').focus();
+    } catch {
+      // La sesión de recuperación sigue cerrada si Auth no puede comprobar el enlace.
+    } finally {
+      clearCallback();
+      if (!recoveryClient) $('cloud-authIntro').textContent = invalidLink;
+    }
+  }
+  recoveryForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!recoveryClient || busy) return;
+    busy = true;
+    recoverySubmit.disabled = true;
+    try {
+      const {error} = await recoveryClient.auth.updateUser({password:$('cloud-newPassword').value});
+      if (error?.status === 401 || error?.status === 403 || error?.code === 'session_not_found') {
+        status(invalidLink);
+        recoveryClient = null;
+        recoveryForm.hidden = true;
+      } else if (report(error, 'Contraseña actualizada. Vuelve a ProgressMate para continuar.')) {
+        recoveryForm.hidden = true;
+        $('cloud-authTitle').textContent = 'Contraseña actualizada';
+        $('cloud-authIntro').textContent = 'Ya puedes usar tu nueva contraseña.';
+        recoveryClient = null;
+        $('cloud-backAuth').focus();
       }
-    });
+    } catch {
+      status('No se pudo completar la operación. Comprueba tu conexión e inténtalo de nuevo.');
+    } finally {
+      $('cloud-newPassword').value = '';
+      busy = false;
+      recoverySubmit.disabled = !recoveryClient;
+    }
   });
   $('cloud-profileForm').addEventListener('submit', event => {
     event.preventDefault(); perform(async () => {
@@ -257,15 +315,17 @@
     if(navigator.onLine===false)throw Error('offline');
     const {createClient} = window.supabase || await import('https://esm.sh/@supabase/supabase-js@2.49.1');
     if(authTimedOut)return;
-    recovery = new URLSearchParams(location.hash.slice(1)).get('type') === 'recovery';
+    const params = new URLSearchParams(location.hash.slice(1));
+    if (params.get('type') === 'recovery' || params.has('error_code') || params.has('error_description')) {
+      await openRecovery(createClient, config, params);
+      return;
+    }
     client = createClient(config.url, config.publishableKey, {auth:{storageKey:'mpd-auth-v1',flowType:'implicit',detectSessionInUrl:true}});
     window.MPDPublicPeople.connect(client);
     $('cloud-authSubmit').disabled=false;
     window.MPDHabitSync.connect(client);
     client.auth.onAuthStateChange((event, session) => {
       if(authTimedOut)return;
-      if (event === 'PASSWORD_RECOVERY') recovery = true;
-      if (event === 'SIGNED_OUT') recovery = false;
       // No esperar llamadas de Auth dentro del callback del SDK.
       const token=++sessionSequence;
       if(event==='TOKEN_REFRESHED' && session?.user?.id===storage.owner()){
@@ -290,7 +350,7 @@
     if(initialSequence===sessionSequence && await bindSession(data.session))await refresh(data.session);
     [...$('cloud-profileForm').querySelectorAll('button'), ...$('cloud-account').querySelectorAll('button'), ...dialog.querySelectorAll('button')].forEach(button => {button.disabled=false;});
     status(data.session?.user?'Cuenta validada. Hábitos guardados localmente; consulta su estado de sincronización.':'Sin cuenta validada. Puedes explorar hábitos temporales o iniciar sesión.');
-    if (location.hash) history.replaceState(null,'',location.pathname+location.search);
+    clearCallback();
     await loadPublic().catch(()=>status('No se pudo consultar el perfil público. Comprueba tu conexión.'));
 
   } catch (error) {
