@@ -12,6 +12,8 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <script src="./user-storage.js"></script>
   <script src="./migration-ui.js" defer></script>
+  <script src="./transfer-crypto.js" defer></script>
+  <script src="./domain-transfer.js" defer></script>
   <script src="./habit-transport.js" defer></script>
   <script src="./habit-sync.js" defer></script>
   <script src="./pwa.js" defer></script>
@@ -307,7 +309,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <p id="cloud-sync-summary" class="muted" role="status">Guardado en este dispositivo. Cloud Sync está desactivado en esta versión.</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.19.1</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.20.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -485,6 +487,25 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
  <section id="sync-conflict" hidden><h3>Hay cambios en otro dispositivo</h3><p>No se ha reemplazado ninguna versión. La versión local permanece disponible y la remota no se modificará.</p><p id="sync-conflict-summary"></p><button id="sync-export" type="button">Exportar ambas versiones</button><label><input id="sync-consent" type="checkbox">Conservar la versión remota y archivar mis cambios locales para revisarlos.</label><button id="sync-accept" type="button" disabled>Usar remota y archivar local</button><p>Después puedes volver a aplicar los cambios que necesites. No se combinan listas automáticamente para evitar resucitar hábitos eliminados.</p></section>
 <details><summary>Recuperar una versión anterior</summary><p>Se conservan como máximo 10 versiones anteriores y hasta 30 días. Restaurar crea una revisión nueva; no rebobina la sincronización. Exporta tus datos antes si necesitas una copia duradera.</p><button id="sync-versions" type="button">Consultar mis versiones</button><label>Versión<select id="sync-version"></select></label><label><input id="sync-restore-consent" type="checkbox">Confirmo que quiero recuperar la versión seleccionada.</label><button id="sync-restore" type="button">Recuperar versión</button></details>
 </aside>
+  <section class="card" aria-labelledby="transfer-title">
+    <h3 id="transfer-title">Trasladar mis datos locales</h3>
+    <p>Descarga una copia cifrada y guarda su código de apertura. En el otro sitio, inicia sesión con la misma cuenta para importarla.</p>
+    <p>Si tienes hábitos activos y datos anteriores pendientes, revísalos en el sitio antiguo antes de descargar la copia.</p>
+    <label id="transfer-device-label" class="migration-consent" hidden><input id="transfer-device" type="checkbox"> Confirmo que los datos anteriores, el aprendizaje y las preferencias de este navegador me pertenecen y quiero incluirlos.</label>
+    <button id="transfer-download" type="button" class="secondary-action" disabled>Descargar copia local</button>
+    <div id="transfer-code-panel" hidden>
+      <label for="transfer-export-code">Código de apertura de esta copia</label>
+      <input id="transfer-export-code" type="text" readonly autocomplete="off" spellcheck="false">
+      <button id="transfer-copy-code" type="button">Copiar código</button>
+      <p>Guárdalo separado del archivo. Volverás a necesitarlo para importar.</p>
+    </div>
+    <a id="transfer-onward" href="https://progressmate.app/mi_progreso_diario.html" target="_blank" rel="noopener" hidden>Abrir progressmate.app</a>
+    <p><label for="transfer-import-code">Código de apertura</label>
+      <input id="transfer-import-code" type="password" maxlength="60" autocomplete="off" autocapitalize="none" spellcheck="false" disabled></p>
+    <p><label for="transfer-file">Importar una copia local</label> <input id="transfer-file" type="file" accept=".json,application/json" disabled></p>
+    <button id="transfer-apply" type="button" class="secondary-action" hidden>Confirmar importación</button>
+    <p id="transfer-status" role="status" aria-live="polite"></p>
+  </section>
   <section id="legacy-settings" class="card legacy-settings" hidden aria-labelledby="legacy-settings-title">
     <h3 id="legacy-settings-title">Datos de este dispositivo</h3>
     <p id="migration-notice" class="muted" role="status" hidden></p>

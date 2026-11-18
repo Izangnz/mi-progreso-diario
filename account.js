@@ -273,9 +273,13 @@
     if (!recoveryClient || busy) return;
     busy = true;
     recoverySubmit.disabled = true;
+    let retryPassword = false;
     try {
       const {error} = await recoveryClient.auth.updateUser({password:$('cloud-newPassword').value});
-      if (error?.status === 401 || error?.status === 403 || error?.code === 'session_not_found') {
+      if (error?.code === 'same_password') {
+        status('La nueva contraseña debe ser diferente de la anterior.');
+        retryPassword = true;
+      } else if (error?.status === 401 || error?.status === 403 || error?.code === 'session_not_found') {
         status(invalidLink);
         recoveryClient = null;
         recoveryForm.hidden = true;
@@ -292,6 +296,7 @@
       $('cloud-newPassword').value = '';
       busy = false;
       recoverySubmit.disabled = !recoveryClient;
+      if (retryPassword) $('cloud-newPassword').focus();
     }
   });
   $('cloud-profileForm').addEventListener('submit', event => {
@@ -300,6 +305,15 @@
       try {await saveCloudProfile();status($('cloud-privacyStatus').textContent);} catch(error) {status(error.message);}
     });
   });
+  window.MPDVerifyTransferAccount = async uid => {
+    if (!client || navigator.onLine === false) throw Error('Conéctate para verificar tu cuenta antes de importar.');
+    const token = storage.epoch();
+    const {data, error} = await client.auth.getUser();
+    if (error?.name === 'AuthRetryableFetchError') throw Error('No se pudo verificar tu cuenta. Revisa tu conexión.');
+    if (error || data?.user?.id !== uid || storage.owner() !== uid || storage.epoch() !== token) {
+      throw Error('Inicia sesión con la misma cuenta con la que descargaste la copia.');
+    }
+  };
   async function loadPublic() {
     if (client && publicAlias) await window.MPDPublicPeople.open(publicAlias);
   }

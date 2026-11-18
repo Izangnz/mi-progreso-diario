@@ -91,14 +91,20 @@
   };
   async function writeProfile(raw,baseline){const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión para guardar tu perfil privado.');await transaction(['records'],'readwrite',(tx)=>{const store=tx.objectStore('records'),r=store.get(key(uid,'profile'));r.onsuccess=()=>{if(token!==epoch || (r.result??null)!==baseline){tx.abort();return;}store.put(raw,key(uid,'profile'));};});same(token);profileRaw=raw;}
   async function photo(operation,id,blob){const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión para guardar fotografías.');const result=await transaction(['photos'],operation==='get'?'readonly':'readwrite',(tx,done)=>{same(token);const s=tx.objectStore('photos'),k=key(uid,id);const r=operation==='get'?s.get(k):operation==='put'?s.put(blob,k):s.delete(k);r.onsuccess=()=>done(operation==='put'?id:r.result);});same(token);return result;}
-  function validDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const d=new Date(value+'T12:00:00Z');return !isNaN(d)&&d.toISOString().slice(0,10)===value&&value<=date();}
-  function validateHabits(data){if(!data||!validDate(data.day)||!Array.isArray(data.habits)||typeof data.weeklyGoal!=='string'||data.weeklyGoal.length>1000||!data.history||typeof data.history!=='object'||Array.isArray(data.history))throw Error('Hábitos o fechas anteriores inválidos. No se ha importado nada.');
+  function validDate(value, allowFuture=false){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const d=new Date(value+'T12:00:00Z');return !isNaN(d)&&d.toISOString().slice(0,10)===value&&(allowFuture||value<=date());}
+  function validateHabits(data, allowFuture=false){if(!data||!validDate(data.day, allowFuture)||!Array.isArray(data.habits)||typeof data.weeklyGoal!=='string'||data.weeklyGoal.length>1000||!data.history||typeof data.history!=='object'||Array.isArray(data.history))throw Error('Hábitos o fechas anteriores inválidos. No se ha importado nada.');
     const list=items=>{if(!Array.isArray(items)||items.some(h=>!h||!['string','number'].includes(typeof h.id)||typeof h.name!=='string'||!h.name.trim()||typeof h.done!=='boolean'))throw Error('Lista de hábitos anterior inválida.');const ids=items.map(h=>typeof h.id+':'+h.id);if(new Set(ids).size!==ids.length)throw Error('Hay identificadores de hábitos repetidos.');};list(data.habits);
-    for(const [day,value] of Object.entries(data.history)){if(!validDate(day)||!value)throw Error('Historial anterior inválido.');list(value.habits);}return data;}
+    for(const [day,value] of Object.entries(data.history)){if(!validDate(day, allowFuture)||!value)throw Error('Historial anterior inválido.');list(value.habits);}return data;}
+  function validateTransferProfile(profile) {
+    if(profile){const limits={alias:60,avatar:8,bio:300,city:80,occupation:120,interests:200,project:120,learning:500,goal:300};if(profile.version!==1||profile.visibility!=='local'||!profile.fields||!Array.isArray(profile.links)||profile.links.length>5)throw Error('Perfil anterior inválido.');for(const [field,max] of Object.entries(limits)){const v=profile.fields[field]??(field==='occupation'?'':undefined);if(typeof v!=='string'||v.length>max)throw Error('Campo de perfil anterior inválido.');}for(const link of profile.links){const url=new URL(link);if(url.protocol!=='https:'||url.username||url.password)throw Error('Enlace anterior inválido.');}}
+    if(profile?.photoId != null && (typeof profile.photoId !== 'string' || !profile.photoId || profile.photoId.length > 100)) {
+      throw Error('Referencia de foto inválida.');
+    }
+  }
   async function legacy(){
 const habitsRaw=localStorage.getItem('mi-panel-habitos-v1'),privateRaw=localStorage.getItem('mi-progreso-perfil-v1');if(!habitsRaw&&!privateRaw)return null;
     const data=habitsRaw?validateHabits(JSON.parse(habitsRaw)):empty();const profile=privateRaw?JSON.parse(privateRaw):null;
-    if(profile){const limits={alias:60,avatar:8,bio:300,city:80,occupation:120,interests:200,project:120,learning:500,goal:300};if(profile.version!==1||profile.visibility!=='local'||!profile.fields||!Array.isArray(profile.links)||profile.links.length>5)throw Error('Perfil anterior inválido.');for(const [field,max] of Object.entries(limits)){const v=profile.fields[field]??(field==='occupation'?'':undefined);if(typeof v!=='string'||v.length>max)throw Error('Campo de perfil anterior inválido.');}for(const link of profile.links){const url=new URL(link);if(url.protocol!=='https:'||url.username||url.password)throw Error('Enlace anterior inválido.');}}
+    validateTransferProfile(profile);
     let blob=null;if(profile?.photoId){if(typeof profile.photoId!=='string')throw Error('Referencia de foto inválida.');blob=await new Promise((resolve,reject)=>{const r=indexedDB.open('mi-progreso-fotos-v1');r.onupgradeneeded=()=>{r.transaction.abort();reject(Error('No se encuentra la base de fotografías anterior.'));};r.onerror=()=>reject(Error('No se pudo leer la foto anterior.'));r.onsuccess=()=>{const db=r.result;try{const tx=db.transaction('photos','readonly'),q=tx.objectStore('photos').get(profile.photoId);q.onsuccess=()=>{if(!q.result)reject(Error('Falta la fotografía anterior.'));else resolve(q.result);};q.onerror=()=>reject(Error('No se pudo leer la foto.'));tx.oncomplete=()=>db.close();}catch(e){db.close();reject(e);}};});if(!(blob instanceof Blob)||blob.size>512*1024)throw Error('Fotografía anterior inválida.');}
     const photoBytes=blob?Array.from(new Uint8Array(await blob.arrayBuffer())):null;
     const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({habitsRaw,privateRaw,photoBytes}))))).map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -129,10 +135,107 @@ if(!confirmed)throw Error('Confirma explícitamente la importación.');const uid
       if(pr.result&&fresh.blob)tx.objectStore('photos').put(fresh.blob,key(uid,'archive:'+fresh.fingerprint));
       ledger.put({owner:uid,at:stamp},fresh.fingerprint);done('imported');}catch{tx.abort();}};h.onsuccess=finish;pr.onsuccess=finish;};});same(token);if(result==='other')throw Error('Estos datos ya se incorporaron a otra cuenta. No se copiarán.');if(result==='imported'){const importedProfile=await read(uid,'profile');same(token);profileRaw=importedProfile;notify('mpd-imported');}return result;
   }
+  const transferReceipt = (uid, digest) => key(uid, 'transfer:' + digest);
+  const accountRange = uid => IDBKeyRange.bound(uid + ':', uid + ';', false, true);
+  const portableRecord = name => ['habits', 'profile', 'device-data'].includes(name) || name.startsWith('archive:');
+  function exportArchive(archive) {
+    const fields = ['kind', 'habitsRaw', 'privateRaw', 'photoArchiveId', 'importedAt'];
+    const portable = Object.fromEntries(fields.filter(name => Object.hasOwn(archive, name))
+      .map(name => [name, archive[name]]));
+    if (!portable.habitsRaw && archive.operation?.payload) {
+      portable.habitsRaw = JSON.stringify(archive.operation.payload);
+    }
+    return portable;
+  }
+  function readTransfer(tx, uid, ready) {
+    const result = {records: [], photos: [], receipts: []};
+    let remaining = 3;
+    for (const store of stores) {
+      const request = tx.objectStore(store).openCursor(store === 'imports' ? undefined : accountRange(uid));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          if (--remaining === 0) ready(result);
+          return;
+        }
+        const name = String(cursor.key).slice(uid.length + 1);
+        if (store === 'records' && portableRecord(name)) result.records.push([name, name.startsWith('archive:') ? exportArchive(cursor.value) : cursor.value]);
+        if (store === 'photos') result.photos.push([name, cursor.value]);
+        if (store === 'imports' && cursor.value?.owner === uid && /^[a-f0-9]{64}$/.test(cursor.key)) {
+          result.receipts.push([cursor.key, cursor.value.at ?? null]);
+        }
+        cursor.continue();
+      };
+    }
+  }
+  async function exportAccount() {
+    const uid = owner, token = epoch;
+    if (!uid) throw Error('Inicia sesión para descargar tu copia.');
+    await flush();
+    same(token);
+    const result = await transaction(stores, 'readonly', (tx, done) => readTransfer(tx, uid, done));
+    same(token);
+    return {uid, ...result};
+  }
+  async function importAccount(data, digest) {
+    const uid = owner, token = epoch;
+    if (!uid || uid !== data.uid) throw Error('Abre la misma cuenta con la que descargaste la copia.');
+    const result = await transaction(stores, 'readwrite', (tx, done) => {
+      const cancel = () => { try { tx.abort(); } catch { /* La transacción ya terminó. */ } };
+      const detach = () => window.removeEventListener('mpd-owner-lock', cancel);
+      window.addEventListener('mpd-owner-lock', cancel, {once:true});
+      tx.addEventListener('complete', detach, {once:true});
+      tx.addEventListener('abort', detach, {once:true});
+      const records = tx.objectStore('records'), photos = tx.objectStore('photos'), ledger = tx.objectStore('imports');
+      const prior = ledger.get(transferReceipt(uid, digest));
+      prior.onsuccess = () => {
+        if (token !== epoch) { tx.abort(); return; }
+        if (prior.result) { done('already'); return; }
+        readTransfer(tx, uid, current => {
+          const metadata = records.get(key(uid, 'sync'));
+          metadata.onsuccess = () => {
+            if (token !== epoch) { tx.abort(); return; }
+            const habits = current.records.find(([name]) => name === 'habits')?.[1];
+            // Abrir Inicio puede crear un día vacío antes de que el usuario importe.
+            const emptyDashboard = !metadata.result?.existing && !metadata.result?.intent?.clear_goal && habits &&
+              !habits.habits.length && !habits.weeklyGoal && Object.keys(habits.history).length <= 1 &&
+              Object.entries(habits.history).every(([day, entry]) => day === habits.day && !entry.habits.length) &&
+              ['deletedHabitIds', 'deletedHistoryDays', 'deletedHistoryEntries', 'importedLegacyHashes']
+                .every(name => !habits[name]?.length);
+            if (current.photos.length || current.receipts.length ||
+                current.records.some(([name]) => name !== 'habits' || !emptyDashboard)) {
+              done('conflict');
+              return;
+            }
+            const checks = data.receipts.map(([hash]) => ledger.get(hash));
+            let pending = checks.length;
+            function write() {
+              if (token !== epoch) { tx.abort(); return; }
+              if (checks.some(check => check.result && check.result.owner !== uid)) { done('conflict'); return; }
+              for (const [name, value] of data.records) records.put(value, key(uid, name));
+              for (const [name, value] of data.photos) photos.put(value, key(uid, name));
+              for (const [hash, at] of data.receipts) ledger.put({owner: uid, at}, hash);
+              ledger.put({owner: uid}, transferReceipt(uid, digest));
+              done('imported');
+            }
+            if (!pending) write();
+            else for (const check of checks) check.onsuccess = () => { if (--pending === 0) write(); };
+          };
+        });
+      };
+    });
+    same(token);
+    if (result === 'imported') {
+      profileRaw = await read(uid, 'profile');
+      same(token);
+      notify('mpd-imported');
+    }
+    return result;
+  }
   async function remember(uid){await transaction(['records'],'readwrite',tx=>tx.objectStore('records').put(uid?{uid,validatedAt:Date.now()}:null,'__active'));}
   async function restoreOffline(){const marker=await transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').get('__active');r.onsuccess=()=>done(r.result);});if(!marker||await blocked(marker.uid)||Date.now()<marker.validatedAt||Date.now()-marker.validatedAt>7*86400000)return false;await activate(marker.uid);return true;}
   async function blocked(uid){return transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').get('__blocked');r.onsuccess=()=>done(r.result===uid);});}
   async function allowLogin(){await transaction(['records'],'readwrite',tx=>tx.objectStore('records').put(null,'__blocked'));}
   async function logout(){const uid=owner;await activate(null);await remember(null);if(uid)await transaction(['records'],'readwrite',tx=>tx.objectStore('records').put(uid,'__blocked'));}
-  window.MPDUserStorage={legacyImportStatus,flush,sync,blocked,allowLogin,remember,restoreOffline,logout,activate,habits,photo,legacy,importLegacy,validateHabits,owner:()=>owner,epoch:()=>epoch,readProfile:()=>profileRaw,writeProfile,readArchive:async()=>{if(!owner)throw Error('Inicia sesión.');const uid=owner,token=epoch;const result=await transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').openCursor(),out=[];r.onsuccess=()=>{const c=r.result;if(!c){done(out);return;}if(String(c.key).startsWith(key(uid,'archive:')))out.push(c.value);c.continue();};});same(token);return result;}};
+  window.MPDUserStorage={exportAccount,importAccount,validateTransferProfile,legacyImportStatus,flush,sync,blocked,allowLogin,remember,restoreOffline,logout,activate,habits,photo,legacy,importLegacy,validateHabits,owner:()=>owner,epoch:()=>epoch,readProfile:()=>profileRaw,writeProfile,readArchive:async()=>{if(!owner)throw Error('Inicia sesión.');const uid=owner,token=epoch;const result=await transaction(['records'],'readonly',(tx,done)=>{const r=tx.objectStore('records').openCursor(),out=[];r.onsuccess=()=>{const c=r.result;if(!c){done(out);return;}if(String(c.key).startsWith(key(uid,'archive:')))out.push(c.value);c.continue();};});same(token);return result;}};
 })();
