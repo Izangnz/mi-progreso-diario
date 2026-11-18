@@ -263,6 +263,16 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   #inicio .dashboard-grid > .card { grid-column:auto; }
   #inicio .dashboard-recent,#inicio .dashboard-objective:has(details[open]) { grid-column:1 / -1; }
 }
+
+#transfer-code-panel { margin-block: 1rem; }
+#transfer-export-code { display: block; box-sizing: border-box; min-height: 64px; margin-top: .4rem; font: 16px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; resize: none; }
+.transfer-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.transfer-actions > * { min-height: 44px; }
+#transfer-download { display: inline-flex; align-items: center; justify-content: center; padding: .65rem .9rem; border-radius: 11px; border: 1px solid currentColor; text-align: center; }
+@media (max-width: 480px) {
+  .transfer-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+}
+
 </style>
   <link rel="stylesheet" href="./comunidad.css">
   <script src="./comunidad-datos.js" defer></script>
@@ -309,7 +319,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <p id="cloud-sync-summary" class="muted" role="status">Guardado en este dispositivo. Cloud Sync está desactivado en esta versión.</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.20.0</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.20.1</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -492,12 +502,16 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
     <p>Descarga una copia cifrada y guarda su código de apertura. En el otro sitio, inicia sesión con la misma cuenta para importarla.</p>
     <p>Si tienes hábitos activos y datos anteriores pendientes, revísalos en el sitio antiguo antes de descargar la copia.</p>
     <label id="transfer-device-label" class="migration-consent" hidden><input id="transfer-device" type="checkbox"> Confirmo que los datos anteriores, el aprendizaje y las preferencias de este navegador me pertenecen y quiero incluirlos.</label>
-    <button id="transfer-download" type="button" class="secondary-action" disabled>Descargar copia local</button>
+    <button id="transfer-prepare" type="button" class="secondary-action" disabled>Preparar copia cifrada</button>
     <div id="transfer-code-panel" hidden>
       <label for="transfer-export-code">Código de apertura de esta copia</label>
-      <input id="transfer-export-code" type="text" readonly autocomplete="off" spellcheck="false">
-      <button id="transfer-copy-code" type="button">Copiar código</button>
-      <p>Guárdalo separado del archivo. Volverás a necesitarlo para importar.</p>
+      <textarea id="transfer-export-code" rows="2" readonly autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="transfer-code-help"></textarea>
+      <p id="transfer-code-help">Guarda este código separado del archivo. Lo necesitarás para recuperar tus datos.</p>
+      <div class="transfer-actions">
+        <button id="transfer-copy-code" type="button">Copiar código</button>
+        <a id="transfer-download" download="ProgressMate-copia-local.json">Descargar archivo</a>
+        <button id="transfer-hide-code" type="button" class="secondary-action">Ocultar código</button>
+      </div>
     </div>
     <a id="transfer-onward" href="https://progressmate.app/mi_progreso_diario.html" target="_blank" rel="noopener" hidden>Abrir progressmate.app</a>
     <p><label for="transfer-import-code">Código de apertura</label>

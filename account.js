@@ -136,6 +136,7 @@
     $('cloud-publicLink').removeAttribute('href');
   }
   async function refresh(session) {
+    if (!session?.user) window.dispatchEvent(new Event('mpd-transfer-session-ended'));
     const current = ++revision;
     const previousUser = user?.id;
     user = session?.user || null;
@@ -216,6 +217,7 @@
     report(error, 'Si existe una cuenta para ese email, recibirás un enlace de recuperación.');
   }));
   $('cloud-signout').addEventListener('click', async () => {
+    window.dispatchEvent(new Event('mpd-transfer-session-ended'));
     ++sessionSequence;
     user=null;
     const closing=storage.logout(); // Oculta el propietario de forma síncrona.

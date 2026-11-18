@@ -109,47 +109,64 @@
     if (incorporated) receipts.set(fingerprint, null);
     return {...data, records: [...records], photos: [...photos], receipts: [...receipts]};
   }
-  function saveFile(text) {
-    const file = new Blob([text], {type: 'application/json'});
-    if (file.size > maximumSize) throw Error('La copia supera el tamaño admitido. Los datos siguen en este dispositivo.');
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'ProgressMate-copia-local.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-  }
-  const download = $('transfer-download'), input = $('transfer-file'), apply = $('transfer-apply');
+  const prepare = $('transfer-prepare'), download = $('transfer-download');
+  const input = $('transfer-file'), apply = $('transfer-apply');
   const status = $('transfer-status'), includeDevice = $('transfer-device');
   const onward = $('transfer-onward'), code = $('transfer-import-code');
   const codePanel = $('transfer-code-panel'), exportedCode = $('transfer-export-code');
   const backupCrypto = window.MPDTransferCrypto;
-  $('transfer-copy-code').addEventListener('click', async () => {
-    try {
-      if (!exportedCode.value) return;
-      await navigator.clipboard.writeText(exportedCode.value);
-      status.textContent = 'Código copiado. Guárdalo separado del archivo.';
-    } catch {
-      exportedCode.select();
-      status.textContent = 'Copia el código seleccionado.';
-    }
-  });
-  let pending = null, busy = false;
+  let pending = null, busy = false, prepared = null;
   const hasDeviceData = () => legacyKeys.some(name => localStorage.getItem(name) !== null);
   const render = () => {
-    const signedIn = Boolean(storage.owner());
-    download.disabled = input.disabled = code.disabled = busy || !signedIn;
+    const uid = storage.owner();
+    const showCode = Boolean(uid && prepared?.uid === uid);
+    prepare.hidden = showCode;
+    prepare.disabled = input.disabled = code.disabled = busy || !uid;
+    codePanel.hidden = !showCode;
+    exportedCode.value = showCode ? prepared.code : '';
+    if (showCode) download.href = prepared.url;
+    else download.removeAttribute('href');
+    onward.hidden = !showCode || !prepared.downloaded || location.origin !== 'https://izangnz.github.io';
     apply.hidden = !pending;
-    apply.disabled = busy || !signedIn;
-    includeDevice.disabled = busy || !signedIn;
-    $('transfer-device-label').hidden = !signedIn || !hasDeviceData();
+    apply.disabled = busy || !uid;
+    includeDevice.disabled = busy || !uid || showCode;
+    $('transfer-device-label').hidden = !uid || !hasDeviceData();
   };
-  const reset = () => {
+  function discardCopy() {
+    if (prepared) URL.revokeObjectURL(prepared.url);
+    prepared = null;
+  }
+  $('transfer-copy-code').addEventListener('click', async () => {
+    const current = prepared;
+    if (!current || current.uid !== storage.owner()) return;
+    try {
+      await navigator.clipboard.writeText(current.code);
+      if (prepared === current && storage.owner() === current.uid) {
+        status.textContent = 'Código copiado. Guárdalo separado del archivo.';
+      }
+    } catch {
+      if (prepared !== current || storage.owner() !== current.uid) return;
+      exportedCode.focus();
+      exportedCode.select();
+      status.textContent = 'Si no se ha copiado, usa Copiar en el menú de selección.';
+    }
+  });
+  $('transfer-hide-code').addEventListener('click', () => {
+    discardCopy();
+    status.textContent = 'Código oculto. Puedes preparar otra copia si lo necesitas.';
+    render();
+    prepare.focus();
+  });
+  const lock = () => {
     pending = null;
-    input.value = code.value = exportedCode.value = '';
-    includeDevice.checked = false;
-    onward.hidden = codePanel.hidden = true;
+    input.value = code.value = '';
     status.textContent = '';
+    render();
+  };
+  const ready = () => {
+    // La revalidación de Auth puede bloquear temporalmente el mismo propietario.
+    const uid = storage.owner();
+    if (uid && prepared && prepared.uid !== uid) discardCopy();
     render();
   };
   function verifyOwner(uid, epoch) {
@@ -184,7 +201,7 @@
     const entry = {values, photo, fingerprint};
     if (!record[1].some(prior => JSON.stringify(prior) === JSON.stringify(entry))) record[1].push(entry);
   }
-  download.addEventListener('click', () => run(async (uid, epoch) => {
+  prepare.addEventListener('click', () => run(async (uid, epoch) => {
     const data = await storage.exportAccount();
     await collectDeviceData(data);
     data.photos = await Promise.all(data.photos.map(async ([name, blob]) => [name, await encodePhoto(blob)]));
@@ -195,12 +212,19 @@
     if (new Blob([plain]).size > maximumSize * 0.74) throw Error('La copia supera el tamaño admitido. Los datos siguen en este dispositivo.');
     const backup = await backupCrypto.seal(plain);
     verifyOwner(uid, epoch);
-    saveFile(backup.contents);
-    exportedCode.value = backup.code;
-    codePanel.hidden = false;
-    status.textContent = 'Copia cifrada descargada. Guarda también su código para poder abrirla.';
+    const file = new Blob([backup.contents], {type:'application/json'});
+    if (file.size > maximumSize) throw Error('La copia supera el tamaño admitido. Los datos siguen en este dispositivo.');
+    prepared = {uid, code:backup.code, url:URL.createObjectURL(file), downloaded:false};
+    render();
+    $('transfer-copy-code').focus();
+    status.textContent = 'Copia preparada. Guarda su código y luego descarga el archivo.';
+  }, 'No se pudo preparar la copia.'));
+  download.addEventListener('click', event => {
+    if (!prepared || prepared.uid !== storage.owner()) { event.preventDefault(); return; }
+    prepared.downloaded = true;
     onward.hidden = location.origin !== 'https://izangnz.github.io';
-  }, 'No se pudo descargar la copia.'));
+    status.textContent = 'Descarga iniciada. Conserva el código para recuperar tus datos.';
+  });
   input.addEventListener('change', () => run(async (uid, epoch) => {
     const file = input.files[0];
     pending = null;
@@ -236,7 +260,8 @@
       result === 'already' ? 'Esta copia ya está importada.' :
       'Ya hay datos en este navegador. Se han conservado. Descarga una copia de ambos orígenes antes de decidir cuál usar.';
   }, 'No se pudo importar la copia.'));
-  window.addEventListener('mpd-owner-lock', reset);
-  window.addEventListener('mpd-owner-ready', render);
+  window.addEventListener('mpd-owner-lock', lock);
+  window.addEventListener('mpd-owner-ready', ready);
+  window.addEventListener('mpd-transfer-session-ended', () => { discardCopy(); render(); });
   render();
 })();
