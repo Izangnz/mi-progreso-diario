@@ -15,6 +15,8 @@
   <script src="./transfer-crypto.js" defer></script>
   <script src="./domain-transfer.js" defer></script>
   <script src="./habit-transport.js" defer></script>
+  <script src="./cloud-release.js" defer></script>
+  <script src="./sync-engine.js" defer></script>
   <script src="./habit-sync.js" defer></script>
   <script src="./pwa.js" defer></script>
   <style>
@@ -319,7 +321,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
   <p class="global-save-status" id="savedStatus" role="status">Comprobando datos guardados…</p>
   <p id="cloud-sync-summary" class="muted" role="status">Guardado en este dispositivo. Cloud Sync está desactivado en esta versión.</p>
   <section id="inicio" class="app-view" aria-labelledby="inicioTitle">
-    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.20.1</p></div>
+    <div class="dashboard-heading"><h2 id="inicioTitle" class="view-title" tabindex="-1">Inicio</h2><p class="version-label">Mi Progreso Diario · v0.21.0</p></div>
     <div class="dashboard-welcome"><p id="greeting" class="dashboard-greeting"></p><p class="sub" id="dateLabel"></p></div>
     <div class="dashboard-grid">
       <section class="card dashboard-today" aria-labelledby="todayTitle">
@@ -628,7 +630,7 @@ body:has(#inicio:not([hidden])) #savedStatus:not(.is-error) { margin-bottom:8px;
       const next=await window.MPDUserStorage.habits(value=>{prepareDay(value);if(change)change(value);value.history[value.day]=dailyRecord(value.habits);},{userChange:!!change});
       if(token!==window.MPDUserStorage.epoch())return false;
       state=next;dashboardReliable=true;
-      document.getElementById('savedStatus').textContent=goalDraftPending ? 'Aviso: el objetivo tiene cambios pendientes de confirmar. Su borrador se conserva.' : window.MPDUserStorage.owner() ? 'Guardado en este dispositivo. Sin sincronización entre dispositivos.' : 'Modo invitado temporal. Inicia sesión para conservar estos cambios; no se asignan datos antiguos automáticamente.';
+      document.getElementById('savedStatus').textContent=goalDraftPending ? 'Aviso: el objetivo tiene cambios pendientes de confirmar. Su borrador se conserva.' : window.MPDUserStorage.owner() ? (window.MPDHabitSync?.enabled() ? 'Guardado en este dispositivo. Consulta el estado de Cloud Sync.' : 'Guardado en este dispositivo. Sin sincronización entre dispositivos.') : 'Modo invitado temporal. Inicia sesión para conservar estos cambios; no se asignan datos antiguos automáticamente.';
       render();return true;
     }catch(error){if(token!==window.MPDUserStorage.epoch())return false;dashboardReliable=false;document.getElementById('savedStatus').textContent='Aviso: no se ha guardado. '+error.message;render();return false;}
   }

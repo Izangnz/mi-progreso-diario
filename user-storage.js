@@ -27,8 +27,17 @@
   const mergeIntent=(a={},b={})=>({habits:[...new Set([...(a.habits||[]),...(b.habits||[])])],history_days:[...new Set([...(a.history_days||[]),...(b.history_days||[])])],history_entries:[...new Set([...(a.history_entries||[]),...(b.history_entries||[])])],clear_goal:!!(a.clear_goal||b.clear_goal)});
   function diffIntent(before,after){const id=h=>typeof h.id+':'+h.id;const result=blankIntent();const ids=new Set(after.habits.map(id));result.habits=before.habits.map(id).filter(k=>!ids.has(k));result.history_days=Object.keys(before.history).filter(day=>!Object.hasOwn(after.history,day));for(const [day,record] of Object.entries(before.history)){if(!Object.hasOwn(after.history,day))continue;const entries=new Set(after.history[day].habits.map(id));result.history_entries.push(...record.habits.map(id).filter(k=>!entries.has(k)).map(k=>day+'|'+k));}result.clear_goal=!!before.weeklyGoal&&!after.weeklyGoal;return result;}
   const newSync = () => ({revision:null,dirty:false,existing:false,pending:null,conflict:null,intent:blankIntent()});
+  function abortWhenOwnerLocks(tx) {
+    const cancel = () => { try { tx.abort(); } catch { /* La transacción ya terminó. */ } };
+    const detach = () => window.removeEventListener('mpd-owner-lock', cancel);
+    window.addEventListener('mpd-owner-lock', cancel, {once:true});
+    tx.addEventListener('complete', detach, {once:true});
+    tx.addEventListener('abort', detach, {once:true});
+  }
   async function bundle(action){const uid=owner,token=epoch;if(!uid)throw Error('Inicia sesión para sincronizar.');
-    const result=await transaction(['records'],'readwrite',(tx,done)=>{const store=tx.objectStore('records'),h=store.get(key(uid,'habits')),m=store.get(key(uid,'sync'));let count=0;const finish=()=>{if(++count!==2)return;try{same(token);const meta=m.result??{...newSync(),existing:!!h.result};action({store,uid,data:h.result??null,meta,done});}catch{tx.abort();}};h.onsuccess=finish;m.onsuccess=finish;});same(token);return result;
+    const result=await transaction(['records'],'readwrite',(tx,done)=>{
+      abortWhenOwnerLocks(tx);
+      const store=tx.objectStore('records'),h=store.get(key(uid,'habits')),m=store.get(key(uid,'sync'));let count=0;const finish=()=>{if(++count!==2)return;try{same(token);const meta=m.result??{...newSync(),existing:!!h.result};action({store,uid,data:h.result??null,meta,done});}catch{tx.abort();}};h.onsuccess=finish;m.onsuccess=finish;});same(token);return result;
   }
   // JSONB puede devolver las mismas propiedades en otro orden.
   function documentSignature(value){
@@ -40,13 +49,18 @@
   async function habits(change,options={}){const uid=owner,token=epoch;if(!uid){guestHabits??=empty();const next=structuredClone(guestHabits);if(change)change(next);same(token);guestHabits=next;return next;}
     let changed=false;const result=await bundle(({store,uid,data,meta,done})=>{const value=data??empty(),before=documentSignature(value),previous=structuredClone(value),oldIds=value.habits.map(h=>typeof h.id+':'+h.id);if(change)change(value);
       const present=new Set(value.habits.map(h=>typeof h.id+':'+h.id));const deleted=oldIds.filter(id=>!present.has(id));if(options.userChange===true){const requested=diffIntent(previous,value);meta.intent=mergeIntent(meta.intent,requested);for(const [name,field] of [['history_days','deletedHistoryDays'],['history_entries','deletedHistoryEntries']])if(requested[name].length)value[field]=[...new Set([...(value[field]||[]),...requested[name]])];}if(deleted.length)value.deletedHabitIds=[...new Set([...(value.deletedHabitIds||[]),...deleted])];
-      if(change&&documentSignature(value)!==before){changed=true;meta.dirty=true;meta.existing=meta.existing||options.userChange===true;store.put(value,key(uid,'habits'));store.put(meta,key(uid,'sync'));}done(value);});if(changed)notify('mpd-sync-dirty');return result;
+      if(change&&documentSignature(value)!==before){changed=options.userChange===true;meta.dirty=meta.dirty||changed;meta.existing=meta.existing||changed;store.put(value,key(uid,'habits'));store.put(meta,key(uid,'sync'));}done(value);});if(changed)notify('mpd-sync-dirty');return result;
   }
   // El servidor puede normalizar estadísticas y marcas, no cambiar el contenido confirmado.
   function contentSignature(value){const items=list=>list.map(h=>({id:h.id,name:h.name,done:h.done}));return JSON.stringify({day:value.day,weeklyGoal:value.weeklyGoal,habits:items(value.habits),history:Object.keys(value.history).sort().map(day=>[day,items(value.history[day].habits)])});}
+  const habitFields = ['deletedHabitIds','deletedHistoryDays','deletedHistoryEntries','importedLegacyHashes'];
+  function hasHabitData(data) {
+    return Boolean(data && (data.habits.length || data.weeklyGoal ||
+      Object.values(data.history).some(entry=>entry.habits.length) || habitFields.some(field=>data[field]?.length)));
+  }
   async function verifiedBackup(){
     const uid=owner,token=epoch,snapshot=await sync.snapshot();same(token);
-    if(!snapshot.data)return null;
+    if(!snapshot.data || (!hasHabitData(snapshot.data) && !snapshot.meta.existing && !snapshot.meta.pending && !snapshot.meta.pendingRecovery))return null;
     const raw=JSON.stringify({habits:snapshot.data,pending:snapshot.meta.pending,pendingRecovery:snapshot.meta.pendingRecovery});
     const digest=async text=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(v=>v.toString(16).padStart(2,'0')).join('');
     const hash=await digest(raw);same(token);
@@ -76,7 +90,9 @@
       if(remote.payload && (meta.dirty||meta.existing) && (meta.revision!==null||meta.existing)){
         meta.conflict=remote;store.put(meta,key(uid,'sync'));done('conflict');return;
       }
-      if(!remote.payload && meta.revision===null && data)meta.dirty=true;
+      if(!remote.payload && meta.revision===null && data){
+        meta.dirty=meta.existing || hasHabitData(data);
+      }
       if(remote.payload){validateHabits(remote.payload);if(data)store.put({habitsRaw:JSON.stringify(data),importedAt:new Date().toISOString(),kind:'before-cloud-download'},key(uid,'archive:'+crypto.randomUUID()));store.put(remote.payload,key(uid,'habits'));meta.dirty=false;}
       meta.revision=remote.revision;meta.existing=false;store.put(meta,key(uid,'sync'));done(remote.payload?'downloaded':'initialized');
     }),
@@ -181,11 +197,7 @@ if(!confirmed)throw Error('Confirma explícitamente la importación.');const uid
     const uid = owner, token = epoch;
     if (!uid || uid !== data.uid) throw Error('Abre la misma cuenta con la que descargaste la copia.');
     const result = await transaction(stores, 'readwrite', (tx, done) => {
-      const cancel = () => { try { tx.abort(); } catch { /* La transacción ya terminó. */ } };
-      const detach = () => window.removeEventListener('mpd-owner-lock', cancel);
-      window.addEventListener('mpd-owner-lock', cancel, {once:true});
-      tx.addEventListener('complete', detach, {once:true});
-      tx.addEventListener('abort', detach, {once:true});
+      abortWhenOwnerLocks(tx);
       const records = tx.objectStore('records'), photos = tx.objectStore('photos'), ledger = tx.objectStore('imports');
       const prior = ledger.get(transferReceipt(uid, digest));
       prior.onsuccess = () => {
@@ -213,6 +225,12 @@ if(!confirmed)throw Error('Confirma explícitamente la importación.');const uid
               if (token !== epoch) { tx.abort(); return; }
               if (checks.some(check => check.result && check.result.owner !== uid)) { done('conflict'); return; }
               for (const [name, value] of data.records) records.put(value, key(uid, name));
+              if (data.records.some(([name]) => name === 'habits')) {
+                const currentSync = metadata.result ?? newSync();
+                currentSync.dirty = true;
+                currentSync.existing = true;
+                records.put(currentSync, key(uid, 'sync'));
+              }
               for (const [name, value] of data.photos) photos.put(value, key(uid, name));
               for (const [hash, at] of data.receipts) ledger.put({owner: uid, at}, hash);
               ledger.put({owner: uid}, transferReceipt(uid, digest));

@@ -1,14 +1,13 @@
-/* Cambiar VERSION en cada publicación que modifique archivos de la aplicación.
-   Mantener este archivo en la misma dirección. Nunca guarda datos personales. */
-const VERSION = "0.20.1";
+/* Candidata Cloud. El worker almacena solo recursos de la aplicación. */
+const VERSION = "0.21.0";
 const CACHE_PREFIX = `mi-progreso-diario:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const FILES = [
   "./supabase-sdk-2.49.1.js", "./supabase-config.public.js",
-  "./habit-transport.js",
+  "./cloud-release.js", "./habit-transport.js", "./sync-engine.js",
   "./welcome.js", "./legacy-access.js",
   "./habit-sync.js", "./user-storage.js", "./migration-ui.js", "./domain-transfer.js", "./transfer-crypto.js",
-  "./account.js", "./account.css", "./", "./index.html", "./mi_progreso_diario.html", "./pwa.js",
+  "./account.js", "./account.css", "./pwa.js",
   "./perfil-datos.js", "./perfil.css", "./perfil-foto.js", "./perfil.js",
   "./descubrir.js", "./comunidad.css", "./comunidad-datos.js", "./comunidad.js",
   "./manifest.webmanifest", "./icons/apple-touch-icon.png",
@@ -16,12 +15,33 @@ const FILES = [
 ];
 const urls = FILES.map(path => new URL(path, self.registration.scope).href);
 
+const pageURL = new URL("./mi_progreso_diario.html", self.registration.scope).href;
+const htmlAlias = pageURL.slice(0, -5);
+const navigationURLs = new Set([
+  pageURL, htmlAlias, self.registration.scope, new URL("./index.html", self.registration.scope).href
+]);
+
+async function cachePage(cache) {
+  const response = await fetch(pageURL, {cache:"reload", redirect:"follow"});
+  if (!response.ok || ![pageURL, htmlAlias].includes(response.url) ||
+      !/^text\/html\b/i.test(response.headers.get("Content-Type") || "")) {
+    throw new Error("No se pudo preparar el documento de la aplicación");
+  }
+  // Fetch sigue las redirecciones de Sites. CacheStorage conservaría
+  // redirected=true y WebKit rechazaría esa respuesta al recargar.
+  const headers = new Headers(response.headers);
+  for (const name of ["Content-Encoding", "Content-Length", "Location"]) headers.delete(name);
+  await cache.put(pageURL, new Response(response.body, {status:response.status, headers}));
+}
+
 self.addEventListener("install", event => {
-  // Si falta un archivo, la instalación falla y la versión anterior sigue activa.
-  event.waitUntil(caches.open(CACHE_NAME).then(cache =>
-    cache.addAll(urls.map(url => new Request(url, {cache:"reload"})))
-  ));
-  // Las actualizaciones esperan a que el usuario pulse «Actualizar».
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await Promise.all([
+      cachePage(cache),
+      cache.addAll(urls.map(url => new Request(url, {cache:"reload", redirect:"error"})))
+    ]);
+  })());
 });
 
 self.addEventListener("activate", event => {
@@ -49,12 +69,15 @@ self.addEventListener("message", event => {
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
-  // Solo los archivos de la aplicación. No intercepta otros proyectos ni servicios.
   url.search = "";
   url.hash = "";
-  if (!urls.includes(url.href)) return;
+  const cacheKey = event.request.mode === "navigate" && navigationURLs.has(url.href)
+    ? pageURL : url.href;
+  if (cacheKey !== pageURL && !urls.includes(cacheKey)) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    return await cache.match(url.href) || fetch(event.request);
+    const cached = await cache.match(cacheKey);
+    if (cached?.ok && !cached.redirected) return cached;
+    return fetch(event.request);
   })());
 });

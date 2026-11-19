@@ -1,16 +1,44 @@
-/* Controlador estable inerte. No consulta ni envía datos de hábitos a Cloud. */
+/* Sincronización privada: revisiones CAS, operación durable e idempotencia. */
 (() => {
- const CLOUD_ENABLED = false;
- const $=id=>document.getElementById(id);
- async function run(){
-  const panel=$('sync-panel');if(panel)panel.hidden=true;
-  const status=$('sync-status'),summary=$('cloud-sync-summary');
-  if(status)status.textContent='Guardado localmente. Sin sincronización entre dispositivos.';
-  if(summary)summary.textContent='Guardado localmente. Sin sincronización entre dispositivos.';
-  for(const id of ['sync-retry','sync-versions','sync-restore','sync-review-accept','sync-accept']){const button=$(id);if(button)button.disabled=true;}
-  return CLOUD_ENABLED;
+ // Cambiar solo después de validar SQL/RLS y autorizar su despliegue.
+ const policy = window.MPDCloudRelease;
+ const CLOUD_ENABLED = policy?.enabled() === true;
+ const store=window.MPDUserStorage,$=id=>document.getElementById(id);
+ let client=null,running=false,queued=false,queuedForce=false,schemaMissing=false,backoff=0,retryAt=0;
+ const status=message=>{$('sync-status').textContent=message;const summary=$('cloud-sync-summary');if(summary)summary.textContent=message;};
+ const current=(epoch,uid)=>epoch===store.epoch() && uid===store.owner();
+ function checkError(error){if(error){const e=Error('No se pudo confirmar la sincronización.');e.code=error.code;throw e;}}
+ function describe(snapshot){const conflict=snapshot.meta.conflict;$('sync-conflict').hidden=!conflict;if(conflict){$('sync-conflict-summary').textContent=`Local: ${snapshot.data?.habits?.length||0} hábitos, ${Object.keys(snapshot.data?.history||{}).length} días. Remota: ${conflict.payload?.habits?.length||0} hábitos, ${Object.keys(conflict.payload?.history||{}).length} días. Revisión remota ${conflict.revision}.`;status('Guardado localmente. Conflicto pendiente de resolver.');}}
+ async function remote(uid,transport){const result=await transport.from('mpd_habit_state').select('revision,payload').eq('user_id',uid).maybeSingle();checkError(result.error);const value=result.data??{revision:0,payload:null};if(!Number.isSafeInteger(value.revision)||value.revision<0)throw Error('Revisión remota inválida.');if(value.payload)store.validateHabits(value.payload);return value;}
+ async function run(force=false){
+  if(!CLOUD_ENABLED){status('Guardado localmente. Sincronización Cloud desactivada.');return;}
+  if(force){schemaMissing=false;retryAt=0;}
+  if(running){queued=true;queuedForce=queuedForce||force;return;}
+  const uid=store.owner(),epoch=store.epoch();if(!uid){status('Guardado localmente. Inicia sesión para sincronizar.');return;}
+  if(!client||navigator.onLine===false){status('Guardado localmente · Pendiente de sincronizar al recuperar conexión.');return;}
+  if(schemaMissing){status('Guardado localmente · Pendiente: falta aplicar el SQL de sincronización.');return;}
+  if(Date.now()<retryAt)return;
+  running=true;queued=false;$('sync-panel').setAttribute('aria-busy','true');status('Guardado localmente · Pendiente de sincronizar…');
+  try{
+   await window.MPDSyncEngine.cycle({store,uid,epoch,current,openTransport:()=>window.MPDHabitTransport.open(client,{epoch,uid}),events:{status,conflict:describe,pulled:()=>window.dispatchEvent(new Event('mpd-habits-pulled')),review:response=>{$('sync-review').hidden=false;const missing=response.missing||{};$('sync-review-summary').textContent=`Revisa ${(missing.habits||[]).length} hábitos, ${(missing.history_days||[]).length} días y ${(missing.history_entries||[]).length} entradas; Supabase no ha aplicado la eliminación.`;},retry:delay=>{retryAt=Date.now()+delay;},resetRetry:()=>{backoff=0;retryAt=0;}}});
+  }catch(error){if(!current(epoch,uid))return;if(error.code==='MPD_PILOT_DISABLED'){retryAt=Date.now()+30000;status('Guardado en este dispositivo. Cloud Sync aún no está habilitado para esta cuenta.');return;}schemaMissing=['PGRST202','PGRST205','42P01'].includes(error.code);backoff=Math.min(backoff?backoff*2:5000,60000);retryAt=Date.now()+backoff;status(schemaMissing?'Guardado localmente · Pendiente: SQL de sincronización aún no disponible.':'Guardado localmente · Pendiente de sincronizar. Revisa conexión o sesión y vuelve a intentarlo.');}
+  finally{running=false;$('sync-panel').setAttribute('aria-busy','false');if(queued){const forceAgain=queuedForce;queued=false;queuedForce=false;queueMicrotask(()=>run(forceAgain));}}
  }
- window.MPDHabitSync=Object.freeze({connect:()=>run(),run,isRunning:()=>false,enabled:()=>false});
- window.addEventListener('mpd-owner-ready',run);
- run();
+ $('sync-versions').addEventListener('click',async()=>{const uid=store.owner(),epoch=store.epoch();if(!CLOUD_ENABLED||running||!uid||!client)return;try{const transport=await window.MPDHabitTransport.open(client,{epoch,uid});if(!current(epoch,uid))return;const response=await transport.from('mpd_habit_versions').select('revision,saved_at').eq('user_id',uid).order('revision',{ascending:false}).limit(41);if(!current(epoch,uid))return;checkError(response.error);$('sync-version').replaceChildren();for(const version of response.data||[]){if(!Number.isSafeInteger(version.revision))continue;const option=document.createElement('option');option.value=String(version.revision);option.textContent='Revisión '+version.revision+' · '+new Date(version.saved_at).toLocaleString('es-ES');$('sync-version').append(option);}status(response.data?.length?'Versiones propias disponibles. Restaurar requiere confirmación; no borra las copias locales.':'No hay versiones recuperables disponibles.');}catch{if(current(epoch,uid))status('No se pudieron consultar las versiones. Puede faltar el SQL revisado.');}});
+ $('sync-restore').addEventListener('click',async()=>{if(!CLOUD_ENABLED||running||!$('sync-restore-consent').checked||navigator.onLine===false)return;const version=Number($('sync-version').value);if(!Number.isSafeInteger(version)||version<1)return;const epoch=store.epoch();try{await store.sync.startRecovery(version);if(epoch!==store.epoch())return;$('sync-restore-consent').checked=false;run(true);}catch{status('Primero sincroniza o resuelve los cambios pendientes. No se ha iniciado recuperación.');}});
+ $('sync-review-consent').addEventListener('change',()=>{$('sync-review-accept').disabled=!$('sync-review-consent').checked;});
+ $('sync-review-accept').addEventListener('click',async()=>{if(!CLOUD_ENABLED||running||!$('sync-review-consent').checked)return;const epoch=store.epoch();try{await store.sync.confirmDeletionReview();if(epoch!==store.epoch())return;$('sync-review').hidden=true;$('sync-review-consent').checked=false;run(true);}catch{status('No se confirmó la eliminación. Los datos se conservan.');}});
+ $('sync-retry').addEventListener('click',()=>run(true));
+ $('sync-consent').addEventListener('change',()=>{$('sync-accept').disabled=!$('sync-consent').checked;});
+ function download(value){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='progressmate-conflicto.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ $('sync-export').addEventListener('click',async()=>{try{const token=store.epoch(),snapshot=await store.sync.snapshot();if(token!==store.epoch())return;download({local:snapshot.data,pending:snapshot.meta.pending,remote:snapshot.meta.conflict?.payload,revision:snapshot.meta.conflict?.revision});}catch{status('No se pudo exportar. Los datos permanecen en este dispositivo.');}});
+ $('sync-accept').addEventListener('click',async()=>{if(!CLOUD_ENABLED||running||!$('sync-consent').checked)return;const epoch=store.epoch(),uid=store.owner();running=true;$('sync-accept').disabled=true;try{if(!client||navigator.onLine===false)throw Error();await store.sync.backup();if(!current(epoch,uid))return;const transport=await window.MPDHabitTransport.open(client,{epoch,uid});if(!current(epoch,uid))return;const expected=(await store.sync.snapshot()).meta.conflict?.revision;if(!current(epoch,uid))return;const latest=await remote(uid,transport);if(!current(epoch,uid))return;if(latest.revision!==expected){await store.sync.conflict(latest);describe(await store.sync.snapshot());$('sync-consent').checked=false;status('La versión remota cambió. Revisa el resumen y confirma de nuevo.');return;}await store.sync.conflict(latest);if(!current(epoch,uid))return;await store.sync.acceptRemote();if(!current(epoch,uid))return;$('sync-conflict').hidden=true;$('sync-consent').checked=false;window.dispatchEvent(new Event('mpd-habits-pulled'));status('Versión remota conservada. Cambios locales archivados; puedes exportarlos desde Mi perfil.');}catch{if(current(epoch,uid))status('No se pudo resolver el conflicto. Ambas versiones se conservan.');}finally{running=false;}});
+ window.addEventListener('mpd-owner-lock',()=>{$('sync-version').replaceChildren();$('sync-restore-consent').checked=false;$('sync-review').hidden=true;$('sync-review-summary').textContent='';$('sync-review-consent').checked=false;$('sync-review-accept').disabled=true;$('sync-conflict').hidden=true;$('sync-conflict-summary').textContent='';$('sync-consent').checked=false;$('sync-accept').disabled=true;status('Datos anteriores ocultos. Comprobando cuenta…');schemaMissing=false;retryAt=0;});
+ for(const event of ['mpd-owner-ready','mpd-sync-dirty','mpd-imported','online','focus'])window.addEventListener(event,()=>run());
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)run();});
+ setInterval(()=>{if(!document.hidden)run();},30000);
+ for(const id of ['sync-retry','sync-versions','sync-restore','sync-review-accept','sync-accept'])$(id).disabled=!CLOUD_ENABLED;
+ $('sync-restore').disabled = !CLOUD_ENABLED;
+ $('sync-panel').hidden=!CLOUD_ENABLED;
+ window.MPDHabitSync={connect:sdk=>{if(CLOUD_ENABLED)client=sdk;run();},run,isRunning:()=>running,enabled:()=>CLOUD_ENABLED};
 })();
