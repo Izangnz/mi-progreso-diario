@@ -36,7 +36,7 @@
  window.addEventListener('mpd-owner-lock',()=>{$('sync-version').replaceChildren();$('sync-restore-consent').checked=false;$('sync-review').hidden=true;$('sync-review-summary').textContent='';$('sync-review-consent').checked=false;$('sync-review-accept').disabled=true;$('sync-conflict').hidden=true;$('sync-conflict-summary').textContent='';$('sync-consent').checked=false;$('sync-accept').disabled=true;status('Datos anteriores ocultos. Comprobando cuenta…');schemaMissing=false;retryAt=0;});
  for(const event of ['mpd-owner-ready','mpd-sync-dirty','mpd-imported','online','focus'])window.addEventListener(event,()=>run());
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)run();});
- setInterval(()=>{if(!document.hidden)run();},30000);
+ setInterval(()=>{if(!document.hidden && navigator.onLine!==false)run();},12000);
  for(const id of ['sync-retry','sync-versions','sync-restore','sync-review-accept','sync-accept'])$(id).disabled=!CLOUD_ENABLED;
  $('sync-restore').disabled = !CLOUD_ENABLED;
  $('sync-panel').hidden=!CLOUD_ENABLED;

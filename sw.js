@@ -1,5 +1,5 @@
 /* Candidata Cloud. El worker almacena solo recursos de la aplicación. */
-const VERSION = "0.21.0";
+const VERSION = "0.21.1";
 const CACHE_PREFIX = `mi-progreso-diario:${self.registration.scope}:`;
 const CACHE_NAME = CACHE_PREFIX + VERSION;
 const FILES = [

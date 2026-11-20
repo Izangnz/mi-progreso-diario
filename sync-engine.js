@@ -4,10 +4,25 @@
   const status=events.status||(()=>{}),describe=events.conflict||(()=>{}),review=events.review||(()=>{}),notify=events.pulled||(()=>{}),retry=events.retry||(()=>{}),resetRetry=events.resetRetry||(()=>{});
  function checkError(error){if(error){const e=Error('No se pudo confirmar la sincronización.');e.code=error.code;throw e;}}
  async function remote(uid,transport){const result=await transport.from('mpd_habit_state').select('revision,payload').eq('user_id',uid).maybeSingle();checkError(result.error);const value=result.data??{revision:0,payload:null};if(!Number.isSafeInteger(value.revision)||value.revision<0)throw Error('Revisión remota inválida.');if(value.payload)store.validateHabits(value.payload);return value;}
-   await store.sync.backup();if(!current(epoch,uid))return;
-   const transport=await openTransport();if(!current(epoch,uid))return;
    let snapshot=await store.sync.snapshot();if(!current(epoch,uid))return;
-   if(snapshot.meta.conflict){describe(snapshot);return;}
+   if(snapshot.meta.conflict && (snapshot.meta.dirty || snapshot.meta.pending ||
+       snapshot.meta.pendingRecovery || snapshot.meta.review || readOnly)){describe(snapshot);return;}
+   const transport=await openTransport();if(!current(epoch,uid))return;
+   if (!readOnly && !snapshot.meta.pending && !snapshot.meta.pendingRecovery && !snapshot.meta.review &&
+       !snapshot.meta.dirty && !snapshot.meta.needsCanonical && snapshot.meta.revision !== null) {
+    const result=await transport.from('mpd_habit_state').select('revision').eq('user_id',uid).maybeSingle();
+    if(!current(epoch,uid))return;
+    checkError(result.error);
+    const revision=result.data?.revision ?? 0;
+    if(!Number.isSafeInteger(revision)||revision<0)throw Error('Revisión remota inválida.');
+    if(revision===snapshot.meta.revision && !snapshot.meta.conflict) {
+      describe(snapshot);
+      status('Sincronizado · Hábitos, historial y objetivo confirmados en tu cuenta.');
+      resetRetry();
+      return;
+    }
+   }
+   await store.sync.backup();if(!current(epoch,uid))return;
    if(readOnly){
     if(snapshot.meta.pending || snapshot.meta.pendingRecovery || snapshot.meta.review){
      status('TEST de solo lectura. La operación local se conserva pendiente.');
@@ -35,6 +50,13 @@
 
    // Una operación pendiente se reintenta intacta antes de cualquier descarga.
    if(!snapshot.meta.pending){const server=await remote(uid,transport);if(!current(epoch,uid))return;const pulled=await store.sync.pull(server);if(!current(epoch,uid))return;if(pulled==='conflict'){describe(await store.sync.snapshot());return;}if(pulled==='downloaded')notify();}
+   snapshot=await store.sync.snapshot();if(!current(epoch,uid))return;
+   if (!snapshot.meta.pending && !snapshot.meta.dirty) {
+    describe(snapshot);
+    status('Sincronizado · Hábitos, historial y objetivo confirmados en tu cuenta.');
+    resetRetry();
+    return;
+   }
    for(let attempts=0;attempts<4;attempts++){
     if(!current(epoch,uid))return;const operation=await store.sync.freeze();if(!current(epoch,uid))return;if(!operation)break;if(operation.protocol!==2||!operation.intent){status('Cola de una versión anterior: exporta los datos y revisa la migración del cliente antes de enviarla.');return;}
     const response=await transport.rpc('mpd_commit_habits',{operation_id:operation.id,base_revision:operation.base,document:operation.payload,intent:operation.intent});if(!current(epoch,uid))return;checkError(response.error);

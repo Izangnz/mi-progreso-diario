@@ -70,6 +70,19 @@
     if(saved?.snapshotRaw!==raw||await digest(saved.snapshotRaw)!==hash)throw Error('No se pudo verificar el respaldo; sincronización detenida.');
     same(token);return hash;
   }
+  function hasUnconfirmedRemoval(local, remote) {
+    if (!local) return false;
+    const removed = diffIntent(local, remote);
+    const covered = (items, field) => {
+      const markers = new Set(remote[field] || []);
+      return items.every(item => markers.has(item));
+    };
+    return removed.clear_goal ||
+      !covered(removed.habits, 'deletedHabitIds') ||
+      !covered(removed.history_days.filter(day =>
+        local.history[day].habits.length || day !== local.day), 'deletedHistoryDays') ||
+      !covered(removed.history_entries, 'deletedHistoryEntries');
+  }
   const sync={
     backup:verifiedBackup,
     diffIntent,
@@ -84,12 +97,28 @@
         if(meta.needsCanonical&&remote.payload){validateHabits(remote.payload);if(meta.expectedCore&&contentSignature(remote.payload)!==meta.expectedCore)throw Error('La confirmación remota no coincide con los cambios enviados. Los datos locales se conservan.');if(!meta.dirty)store.put(remote.payload,key(uid,'habits'));else if(data){for(const field of ['deletedHabitIds','deletedHistoryDays','deletedHistoryEntries','importedLegacyHashes'])data[field]=[...new Set([...(data[field]||[]),...(remote.payload[field]||[])])];store.put(data,key(uid,'habits'));}meta.needsCanonical=false;meta.expectedCore=null;store.put(meta,key(uid,'sync'));done('downloaded');return;}
         done('same');return;
       }
-      // Una descarga que retire datos requiere revisión, incluso sin cambios locales pendientes.
-      const removed=data&&remote.payload?diffIntent(data,remote.payload):null;
-      if(removed&&(removed.habits.length||removed.history_days.some(day=>data.history[day].habits.length||meta.revision!==null||meta.existing)||removed.history_entries.length||removed.clear_goal)){meta.conflict=remote;store.put(meta,key(uid,'sync'));done('conflict');return;}
-      if(remote.payload && (meta.dirty||meta.existing) && (meta.revision!==null||meta.existing)){
+      if (meta.conflict) {
+        // Una revisión posterior no resuelve automáticamente un conflicto real.
+        // Solo se reabre el falso positivo de v0.21.0 que ya llevaba marcas
+        // de borrado comprobables y nunca tuvo una operación local pendiente.
+        const prior = meta.conflict.payload;
+        const previousRemoval = data && prior ? diffIntent(data, prior) : null;
+        const hasDeletionProof = previousRemoval && (
+          previousRemoval.habits.some(id=>(prior.deletedHabitIds || []).includes(id)) ||
+          previousRemoval.history_days.some(day=>(prior.deletedHistoryDays || []).includes(day)) ||
+          previousRemoval.history_entries.some(id=>(prior.deletedHistoryEntries || []).includes(id)));
+        const legacyDeletion = hasDeletionProof && meta.revision !== null &&
+          !meta.dirty && !meta.existing && !meta.pendingRecovery && !meta.review &&
+          prior.weeklyGoal === data.weeklyGoal && !hasUnconfirmedRemoval(data, prior);
+        if (!legacyDeletion) { done('conflict'); return; }
+      }
+      // Las marcas del servidor acreditan un borrado explícito. Los demás
+      // cambios destructivos y cualquier edición local sin confirmar se revisan.
+      if (remote.payload && (hasUnconfirmedRemoval(data, remote.payload) ||
+          ((meta.dirty || meta.existing) && (meta.revision !== null || meta.existing)))) {
         meta.conflict=remote;store.put(meta,key(uid,'sync'));done('conflict');return;
       }
+      if (meta.conflict) meta.conflict = null;
       if(!remote.payload && meta.revision===null && data){
         meta.dirty=meta.existing || hasHabitData(data);
       }
